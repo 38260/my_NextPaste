@@ -2,6 +2,7 @@ export interface LogEntry {
   level: string
   message: string
   preview?: string
+  category?: string
   timestamp: number
 }
 

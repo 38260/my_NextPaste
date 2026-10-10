@@ -26,14 +26,14 @@ func TestBuildPreviewText(t *testing.T) {
 
 func TestBuildPreviewImage(t *testing.T) {
 	data := make([]byte, 1024*1024) // 1.00 MB
-	got := buildPreview("image", data)
+	got := BuildPreview("image", data)
 	if got != "图片 · 1.00 MB" {
-		t.Errorf("buildPreview(image) = %q, want %q", got, "图片 · 1.00 MB")
+		t.Errorf("BuildPreview(image) = %q, want %q", got, "图片 · 1.00 MB")
 	}
 }
 
 func TestBuildPreviewUnknownType(t *testing.T) {
-	if got := buildPreview("file", []byte("x")); got != "" {
+	if got := BuildPreview("file", []byte("x")); got != "" {
 		t.Errorf("未知类型应返回空预览, got %q", got)
 	}
 }

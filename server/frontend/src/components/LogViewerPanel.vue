@@ -25,12 +25,18 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 type Level = 'ALL' | 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
+type Category = 'ALL' | 'clipboard' | 'connection' | 'system'
 
 const filterLevel = ref<Level>('ALL')
+// 默认只看剪贴板相关内容
+const filterCategory = ref<Category>('clipboard')
 
 const filteredLogs = computed(() => {
-  if (filterLevel.value === 'ALL') return props.logs
-  return props.logs.filter((l) => l.level === filterLevel.value)
+  return props.logs.filter((l) => {
+    if (filterCategory.value !== 'ALL' && l.category !== filterCategory.value) return false
+    if (filterLevel.value !== 'ALL' && l.level !== filterLevel.value) return false
+    return true
+  })
 })
 
 const formatTime = (timestamp: number) => {
@@ -57,16 +63,52 @@ const levelTagType = (level: string) => {
   }
 }
 
+const categoryLabel = (category?: string) => {
+  switch (category) {
+    case 'clipboard':
+      return '剪贴板'
+    case 'connection':
+      return '连接'
+    case 'system':
+      return '系统'
+    default:
+      return '系统'
+  }
+}
+
+const categoryTagType = (category?: string) => {
+  switch (category) {
+    case 'clipboard':
+      return 'success'
+    case 'connection':
+      return 'info'
+    default:
+      return 'default'
+  }
+}
+
 const columns: DataTableColumns<LogEntry> = [
   {
     title: '级别',
     key: 'level',
-    width: 110,
+    width: 100,
     render: (row) => {
       return h(
         NTag,
         { size: 'small', type: levelTagType(row.level) as any },
         { default: () => row.level }
+      )
+    }
+  },
+  {
+    title: '分类',
+    key: 'category',
+    width: 84,
+    render: (row) => {
+      return h(
+        NTag,
+        { size: 'small', type: categoryTagType(row.category) as any, secondary: true },
+        { default: () => categoryLabel(row.category) }
       )
     }
   },
@@ -127,6 +169,17 @@ const handleClear = () => emit('clear')
     <template #header-extra>
       <n-space align="center" :size="8">
         <n-text depth="3">{{ filteredLogs.length }} 条</n-text>
+        <n-select
+          v-model:value="filterCategory"
+          size="small"
+          style="width: 110px"
+          :options="[
+            { label: '全部分类', value: 'ALL' },
+            { label: '剪贴板', value: 'clipboard' },
+            { label: '连接', value: 'connection' },
+            { label: '系统', value: 'system' }
+          ]"
+        />
         <n-select
           v-model:value="filterLevel"
           size="small"

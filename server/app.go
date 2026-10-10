@@ -17,6 +17,7 @@ type LogEntry struct {
 	Level     string `json:"level"`
 	Message   string `json:"message"`
 	Preview   string `json:"preview"` // 剪贴板内容预览（非剪贴板日志为空）
+	Category  string `json:"category"` // "clipboard" | "connection" | "system"
 	Timestamp int64  `json:"timestamp"`
 }
 
@@ -282,15 +283,21 @@ func (a *App) ClearLogs() {
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
 }
 
-// onLogFull 日志回调（含剪贴板内容预览），作为 websocket 包 LogCallback 使用
-func (a *App) onLogFull(level, message, preview string) {
+// onLogFull 日志回调（websocket 包 LogCallback 使用）
+func (a *App) onLogFull(e ws.LogEvent) {
 	a.logsMu.Lock()
 	defer a.logsMu.Unlock()
 
+	category := e.Category
+	if category == "" {
+		category = "system"
+	}
+
 	entry := LogEntry{
-		Level:     level,
-		Message:   message,
-		Preview:   preview,
+		Level:     e.Level,
+		Message:   e.Message,
+		Preview:   e.Preview,
+		Category:  category,
 		Timestamp: 0,
 	}
 
@@ -303,19 +310,31 @@ func (a *App) onLogFull(level, message, preview string) {
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
 }
 
-// onLog 日志回调（无预览）
+// onLog 日志回调（无预览，分类 system）
 func (a *App) onLog(level, message string) {
-	a.onLogFull(level, message, "")
+	a.onLogFull(ws.LogEvent{Level: level, Message: message, Category: "system"})
+}
+
+// onLogClip 日志回调（剪贴板相关，携带内容预览与原始数据，分类 clipboard）
+func (a *App) onLogClip(level, message, dataType string, content []byte) {
+	a.onLogFull(ws.LogEvent{
+		Level:    level,
+		Message:  message,
+		Preview:  ws.BuildPreview(dataType, content),
+		Category: "clipboard",
+		DataType: dataType,
+		Content:  content,
+	})
 }
 
 // onClipboardChange 剪贴板变化回调（服务器模式，V1.1 二进制协议）
 func (a *App) onClipboardChange(data clipboard.ClipboardData) {
 	switch data.Type {
 	case "text":
-		a.onLog("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)))
+		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)), data.Type, data.Content)
 	case "image":
 		sizeMB := float64(len(data.Content)) / 1024 / 1024
-		a.onLog("INFO", fmt.Sprintf("检测到剪贴板图片变化: %.2f MB", sizeMB))
+		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板图片变化: %.2f MB", sizeMB), data.Type, data.Content)
 	default:
 		return
 	}
@@ -331,10 +350,10 @@ func (a *App) onClipboardChange(data clipboard.ClipboardData) {
 func (a *App) onClipboardChangeClient(data clipboard.ClipboardData) {
 	switch data.Type {
 	case "text":
-		a.onLog("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)))
+		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)), data.Type, data.Content)
 	case "image":
 		sizeMB := float64(len(data.Content)) / 1024 / 1024
-		a.onLog("INFO", fmt.Sprintf("检测到剪贴板图片变化: %.2f MB", sizeMB))
+		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板图片变化: %.2f MB", sizeMB), data.Type, data.Content)
 	default:
 		return
 	}
@@ -371,9 +390,9 @@ func (a *App) onClipboardReceivedBinary(dataType string, content []byte) {
 
 	switch dataType {
 	case "text":
-		a.onLog("SUCCESS", fmt.Sprintf("已接收并写入文本数据: %d 字符", len(content)))
+		a.onLogClip("SUCCESS", fmt.Sprintf("已接收并写入文本数据: %d 字符", len(content)), dataType, content)
 	case "image":
 		sizeMB := float64(len(content)) / 1024 / 1024
-		a.onLog("SUCCESS", fmt.Sprintf("已接收并写入图片数据: %.2f MB", sizeMB))
+		a.onLogClip("SUCCESS", fmt.Sprintf("已接收并写入图片数据: %.2f MB", sizeMB), dataType, content)
 	}
 }

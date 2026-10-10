@@ -39,8 +39,18 @@ type Client struct {
 	PendingMeta   *protocol.TransferMeta
 }
 
-// LogCallback 日志回调函数（preview 为剪贴板内容预览，非剪贴板日志传空）
-type LogCallback func(level, message, preview string)
+// LogEvent 单条日志事件
+type LogEvent struct {
+	Level    string
+	Message  string
+	Preview  string // 剪贴板内容预览（非剪贴板日志为空）
+	Category string // "clipboard" | "connection" | "system"
+	DataType string // 剪贴板数据类型（"text"/"image"，否则空）
+	Content  []byte // 剪贴板原始内容（否则 nil）
+}
+
+// LogCallback 日志回调函数
+type LogCallback func(e LogEvent)
 
 // BinaryClipboardCallback 剪贴板数据回调函数（V1.1 二进制协议）
 // dataType: "text" 或 "image"
@@ -285,7 +295,7 @@ func (s *Server) handleBinaryText(client *Client, msg *protocol.BinaryMessage) {
 	deviceName := client.DeviceName
 	client.mu.RUnlock()
 
-	s.log("INFO", fmt.Sprintf("收到文本数据 [%d 字符] 来自 %s", len(text), deviceName), buildPreview("text", []byte(text)))
+	s.logClip("INFO", fmt.Sprintf("收到文本数据 [%d 字符] 来自 %s", len(text), deviceName), "text", []byte(text))
 
 	// 调用回调函数（通知 App 层写入本地剪贴板）
 	if s.clipboardCallback != nil {
@@ -371,7 +381,7 @@ func (s *Server) handleBinaryImage(client *Client, msg *protocol.BinaryMessage) 
 
 	if finished {
 		sizeMB := float64(len(fullData)) / 1024 / 1024
-		s.log("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB] 来自 %s", sizeMB, deviceName), buildPreview("image", fullData))
+		s.logClip("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB] 来自 %s", sizeMB, deviceName), "image", fullData)
 
 		// 调用回调函数
 		if s.clipboardCallback != nil {
@@ -427,7 +437,7 @@ func (s *Server) broadcastContent(dataType string, content []byte, mime string, 
 
 // BroadcastClipboardBinary 广播剪贴板数据（V1.1 二进制协议）
 func (s *Server) BroadcastClipboardBinary(dataType string, content []byte) error {
-	s.log("INFO", fmt.Sprintf("广播剪贴板数据: %s", dataType), buildPreview(dataType, content))
+	s.logClip("INFO", fmt.Sprintf("广播剪贴板数据: %s", dataType), dataType, content)
 	return s.broadcastContent(dataType, content, "", "")
 }
 
@@ -535,14 +545,30 @@ func (s *Server) GetLocalIPs() ([]string, error) {
 	return ips, nil
 }
 
-// log 记录日志（preview 为可选的剪贴板内容预览）
+// log 记录日志（preview 为可选的剪贴板内容预览）；ws 包内默认分类为 connection
 func (s *Server) log(level, message string, preview ...string) {
 	p := ""
 	if len(preview) > 0 {
 		p = preview[0]
 	}
 	if s.logCb != nil {
-		s.logCb(level, message, p)
+		s.logCb(LogEvent{Level: level, Message: message, Preview: p, Category: "connection"})
+	} else {
+		log.Printf("[%s] %s", level, message)
+	}
+}
+
+// logClip 记录剪贴板相关日志（携带内容预览与原始数据，分类为 clipboard）
+func (s *Server) logClip(level, message, dataType string, content []byte) {
+	if s.logCb != nil {
+		s.logCb(LogEvent{
+			Level:    level,
+			Message:  message,
+			Preview:  BuildPreview(dataType, content),
+			Category: "clipboard",
+			DataType: dataType,
+			Content:  content,
+		})
 	} else {
 		log.Printf("[%s] %s", level, message)
 	}

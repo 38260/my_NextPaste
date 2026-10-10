@@ -51,6 +51,25 @@
 - [x] T6.2 运行时手动回归：24 项源码接线断言探针 ALL PASS（探针已删）；GUI 真机验收清单见第 9 节
 - [x] T6.3 README 功能特性补充（五项新能力）
 
+## 10. 需求七：日志分类（commit: feat: 日志分类与默认剪贴板过滤）
+
+- [x] T7.1 `websocket` 包：LogCallback 重构为 LogEvent 结构（Level/Message/Preview/Category/DataType/Content），既有调用零改动（log variadic → Category=connection，logClip → clipboard）；BuildPreview 导出供 app 层共用
+- [x] T7.2 `app.go`：onLogFull 适配 LogEvent，内部 onLog=system，clipboard 回调走 onLogClip；LogEntry 增加 Category
+- [x] T7.3 前端 types/models 增加 category；`LogViewerPanel.vue` 新增"分类"列与分类筛选（默认"剪贴板"）
+- [x] T7.4 验证：go build/vet/test + vue-tsc + vite build 全部通过
+
+## 11. 需求八：剪贴板图片渲染与一键复制（commit: feat: 日志图片缩略图与一键复制）
+
+- [ ] T8.1 `app.go`：内容暂存环（上限 20 条，图片 >20MB 跳过暂存），LogEntry 增加 ContentID；新增 GetLogContent / CopyLogContent 绑定
+- [ ] T8.2 前端 wailsjs 绑定补充；`LogViewerPanel.vue` 图片行懒加载缩略图（base64 data URL）+ 复制图标按钮（CopyLogContent 写回系统剪贴板）
+- [ ] T8.3 验证：单测 + 构建；缩略图/复制实测归入验收清单
+
+## 12. 需求六：桌面端响应式布局（commit: feat: 桌面端响应式布局）
+
+- [ ] T6.1 前端 `AppInner.vue`：监听窗口宽度，侧栏宽度按断点自适应（420→360→300）
+- [ ] T6.2 `LogViewerPanel.vue`：compact 模式列宽自适应，窄窗保证可读性
+- [ ] T6.3 验证：vue-tsc + vite build
+
 ## 7. 本轮不做（含原因）
 
 | 项 | 原因 | 前提何时失效 |
@@ -72,6 +91,7 @@
 | 2026-10-10 | T4.x | 关闭窗口后台常驻：OnBeforeClose 按 closeAction 分流（默认 minimize→任务栏驻留）；真正退出保底入口放设置面板（Quit 不经过 OnBeforeClose），避免 minimize 模式下无路可退 | main.go、app.go、frontend/{SettingsModal.vue、AppInner.vue} | go build/vet/test 全过；vue-tsc + vite build 通过；关窗实测归入验收清单 |
 | 2026-10-10 | T5.x | 连接地址固定：图钉 pin 持久化（np:pinnedAddresses），固定项按 pin 顺序置顶、枚举不到仍灰态保留（列表视角稳定，手机端一次输入永不用改）；"仅显示固定"一键屏蔽 VMware 等虚拟网卡噪音 | frontend/src/components/ConnectionInfoCard.vue | vue-tsc + vite build 通过；运行时实测归入验收清单 |
 | 2026-10-10 | T6.x | 整体测试：全量校验门（build/vet/test/交叉编译/前端构建）+ 24 项接线断言探针；README 补充五项新能力 | README.md、todo.md | 校验门全过、探针 24/24 PASS（探针用后即删） |
+| 2026-10-10 | T7.x | 日志分类：LogCallback 重构为 LogEvent 结构体（顺带打通 DataType/Content 携带，为需求八铺路）；分类判定放在事件源头（ws 默认 connection / logClip=clipboard / app 内部=system），不猜消息文本 | internal/websocket/{server.go、client.go、preview.go、preview_test.go}、app.go、frontend/{types、models.ts、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过 |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 

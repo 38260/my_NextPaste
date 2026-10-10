@@ -288,7 +288,7 @@ func (c *WSClient) handleBinaryMessage(data []byte) {
 // handleBinaryText 处理文本消息（V1.1）
 func (c *WSClient) handleBinaryText(msg *protocol.BinaryMessage) {
 	text := msg.GetTextContent()
-	c.log("INFO", fmt.Sprintf("收到文本数据 [%d 字符]", len(text)), buildPreview("text", []byte(text)))
+	c.logClip("INFO", fmt.Sprintf("收到文本数据 [%d 字符]", len(text)), "text", []byte(text))
 
 	// 调用回调函数（通知 App 层写入本地剪贴板）
 	if c.clipboardCallback != nil {
@@ -363,7 +363,7 @@ func (c *WSClient) handleBinaryImage(msg *protocol.BinaryMessage) {
 
 	if finished {
 		sizeMB := float64(len(fullData)) / 1024 / 1024
-		c.log("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB]", sizeMB), buildPreview("image", fullData))
+		c.logClip("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB]", sizeMB), "image", fullData)
 
 		// 调用回调函数（通知 App 层写入本地剪贴板）
 		if c.clipboardCallback != nil {
@@ -383,7 +383,7 @@ func (c *WSClient) SendClipboardBinary(dataType string, content []byte) error {
 	}
 	c.mu.RUnlock()
 
-	c.log("INFO", fmt.Sprintf("发送剪贴板数据: %s", dataType), buildPreview(dataType, content))
+	c.logClip("INFO", fmt.Sprintf("发送剪贴板数据: %s", dataType), dataType, content)
 
 	var data []byte
 	var err error
@@ -443,13 +443,27 @@ func (c *WSClient) IsConnected() bool {
 	return c.isConnected
 }
 
-// log 记录日志（preview 为可选的剪贴板内容预览）
+// log 记录日志（preview 为可选的剪贴板内容预览）；ws 包内默认分类为 connection
 func (c *WSClient) log(level, message string, preview ...string) {
 	if c.logCb != nil {
 		p := ""
 		if len(preview) > 0 {
 			p = preview[0]
 		}
-		c.logCb(level, message, p)
+		c.logCb(LogEvent{Level: level, Message: message, Preview: p, Category: "connection"})
+	}
+}
+
+// logClip 记录剪贴板相关日志（携带内容预览与原始数据，分类为 clipboard）
+func (c *WSClient) logClip(level, message, dataType string, content []byte) {
+	if c.logCb != nil {
+		c.logCb(LogEvent{
+			Level:    level,
+			Message:  message,
+			Preview:  BuildPreview(dataType, content),
+			Category: "clipboard",
+			DataType: dataType,
+			Content:  content,
+		})
 	}
 }

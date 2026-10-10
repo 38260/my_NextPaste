@@ -22,8 +22,8 @@ func buildTextPreview(text string) string {
 	return string(runes[:previewMaxRunes]) + "…"
 }
 
-// buildPreview 根据剪贴板数据类型生成日志预览列内容
-func buildPreview(dataType string, data []byte) string {
+// BuildPreview 根据剪贴板数据类型生成日志预览列内容（供 websocket 与 app 层共用）
+func BuildPreview(dataType string, data []byte) string {
 	switch dataType {
 	case "text":
 		return buildTextPreview(string(data))
