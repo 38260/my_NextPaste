@@ -3,6 +3,11 @@
 /local.properties
 /.idea
 **/build
+# 例外：品牌图标属于源文件，需要入库（其余构建产物仍然忽略）
+!/server/build/
+/server/build/*
+!/server/build/appicon.png
+!/server/build/windows/
 /.hvigor
 .cxx
 /.clangd
