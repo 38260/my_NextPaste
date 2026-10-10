@@ -8,6 +8,8 @@ export function ClearLogs():Promise<void>;
 
 export function ConnectClient(arg1:string):Promise<void>;
 
+export function CopyLogContent(arg1:number):Promise<void>;
+
 export function DisconnectClient():Promise<void>;
 
 export function GetAutostartStatus():Promise<Record<string, any>>;
@@ -15,6 +17,8 @@ export function GetAutostartStatus():Promise<Record<string, any>>;
 export function GetClientStatus():Promise<Record<string, any>>;
 
 export function GetLocalIPs():Promise<Array<string>>;
+
+export function GetLogContent(arg1:number):Promise<Record<string, any>>;
 
 export function GetLogs():Promise<Array<main.LogEntry>>;
 

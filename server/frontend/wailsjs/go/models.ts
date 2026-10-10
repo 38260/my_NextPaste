@@ -19,6 +19,7 @@ export namespace main {
 	    message: string;
 	    preview: string;
 	    category: string;
+	    contentId: number;
 	    timestamp: number;
 
 	    static createFrom(source: any = {}) {
@@ -31,6 +32,7 @@ export namespace main {
 	        this.message = source["message"];
 	        this.preview = source["preview"];
 	        this.category = source["category"];
+	        this.contentId = source["contentId"];
 	        this.timestamp = source["timestamp"];
 	    }
 	}

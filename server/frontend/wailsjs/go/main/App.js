@@ -14,6 +14,10 @@ export function ConnectClient(arg1) {
   return window['go']['main']['App']['ConnectClient'](arg1);
 }
 
+export function CopyLogContent(arg1) {
+  return window['go']['main']['App']['CopyLogContent'](arg1);
+}
+
 export function DisconnectClient() {
   return window['go']['main']['App']['DisconnectClient']();
 }
@@ -28,6 +32,10 @@ export function GetClientStatus() {
 
 export function GetLocalIPs() {
   return window['go']['main']['App']['GetLocalIPs']();
+}
+
+export function GetLogContent(arg1) {
+  return window['go']['main']['App']['GetLogContent'](arg1);
 }
 
 export function GetLogs() {

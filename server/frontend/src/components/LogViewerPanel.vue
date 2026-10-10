@@ -5,11 +5,15 @@ import {
   NCard,
   NDataTable,
   NEllipsis,
+  NIcon,
   NSelect,
   NSpace,
   NTag,
-  NText
+  NText,
+  useMessage
 } from 'naive-ui'
+import { CopyOutline } from '@vicons/ionicons5'
+import { CopyLogContent, GetLogContent } from '../../wailsjs/go/main/App'
 import type { DataTableColumns } from 'naive-ui'
 import type { LogEntry } from '../types'
 
@@ -23,6 +27,37 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const message = useMessage()
+
+// 图片缩略图懒加载缓存：contentId -> data URL
+const imageCache = ref<Record<number, string>>({})
+const imageLoading = new Set<number>()
+
+const ensureImageLoaded = (contentId: number) => {
+  if (imageCache.value[contentId] || imageLoading.has(contentId)) return
+  imageLoading.add(contentId)
+  GetLogContent(contentId)
+    .then((res: any) => {
+      if (res && res.found && res.type === 'image' && res.imageBase64) {
+        imageCache.value = {
+          ...imageCache.value,
+          [contentId]: `data:image/png;base64,${res.imageBase64}`
+        }
+      }
+    })
+    .catch(() => {})
+    .finally(() => imageLoading.delete(contentId))
+}
+
+const copyContent = async (contentId: number) => {
+  try {
+    await CopyLogContent(contentId)
+    message.success('已复制到剪贴板')
+  } catch (error) {
+    message.error(`复制失败：${String(error)}`)
+  }
+}
 
 type Level = 'ALL' | 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
 type Category = 'ALL' | 'clipboard' | 'connection' | 'system'
@@ -125,22 +160,55 @@ const columns: DataTableColumns<LogEntry> = [
     key: 'preview',
     width: 260,
     render: (row) => {
-      if (!row.preview) {
-        return h(
-          'span',
-          { style: 'opacity: 0.35; user-select: none' },
-          '—'
+      const parts: any[] = []
+
+      if (row.contentId && row.preview && row.preview.startsWith('图片')) {
+        const url = imageCache.value[row.contentId]
+        if (url) {
+          parts.push(
+            h('img', {
+              src: url,
+              style:
+                'max-height:48px; max-width:140px; border-radius:4px; display:block; flex-shrink:0'
+            })
+          )
+        } else {
+          ensureImageLoaded(row.contentId)
+          parts.push(h('span', { style: 'opacity: 0.5; font-size: 12px' }, '加载中…'))
+        }
+      } else if (row.preview) {
+        parts.push(
+          h(
+            NEllipsis,
+            {
+              tooltip: true,
+              style:
+                'font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace; font-size: 12px'
+            },
+            { default: () => row.preview }
+          )
+        )
+      } else {
+        parts.push(h('span', { style: 'opacity: 0.35; user-select: none' }, '—'))
+      }
+
+      if (row.contentId) {
+        parts.push(
+          h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              style: 'flex-shrink: 0',
+              title: '复制此内容',
+              onClick: () => copyContent(row.contentId as number)
+            },
+            { icon: () => h(NIcon, null, { default: () => h(CopyOutline) }) }
+          )
         )
       }
-      return h(
-        NEllipsis,
-        {
-          tooltip: true,
-          style:
-            'font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace; font-size: 12px'
-        },
-        { default: () => row.preview }
-      )
+
+      return h('div', { style: 'display: flex; align-items: center; gap: 6px; min-width: 0' }, parts)
     }
   },
   {

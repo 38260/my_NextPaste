@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -16,10 +17,22 @@ import (
 type LogEntry struct {
 	Level     string `json:"level"`
 	Message   string `json:"message"`
-	Preview   string `json:"preview"` // 剪贴板内容预览（非剪贴板日志为空）
-	Category  string `json:"category"` // "clipboard" | "connection" | "system"
+	Preview   string `json:"preview"`   // 剪贴板内容预览（非剪贴板日志为空）
+	Category  string `json:"category"`  // "clipboard" | "connection" | "system"
+	ContentID int64  `json:"contentId"` // 关联的暂存内容 ID（0 表示无）
 	Timestamp int64  `json:"timestamp"`
 }
+
+// storedContent 暂存的剪贴板内容（用于日志缩略图展示与一键复制）
+type storedContent struct {
+	dataType string
+	content  []byte
+}
+
+const (
+	maxStoredContents   = 20
+	maxStoredImageBytes = 20 * 1024 * 1024 // 图片超过 20MB 不暂存（日志仍正常记录）
+)
 
 // App struct（V1.1 二进制协议版本）
 type App struct {
@@ -35,6 +48,11 @@ type App struct {
 	settingsMu sync.RWMutex
 	settings   Settings
 
+	contents      map[int64]storedContent
+	contentsOrder []int64
+	contentsMu    sync.RWMutex
+	contentNext   int64
+
 	launchFlags LaunchFlags
 }
 
@@ -46,6 +64,7 @@ func NewApp() *App {
 		clipboardMon: clipboard.NewMonitor(),
 		logs:         make([]LogEntry, 0),
 		maxLogs:      500,
+		contents:     make(map[int64]storedContent),
 		mode:         "server", // 默认为服务器模式
 		settings: Settings{
 			AutoStartEnabled:       false,
@@ -283,6 +302,74 @@ func (a *App) ClearLogs() {
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
 }
 
+// storeContent 暂存剪贴板内容，返回内容 ID（不可暂存时返回 0）
+func (a *App) storeContent(dataType string, content []byte) int64 {
+	if dataType != "text" && dataType != "image" {
+		return 0
+	}
+	if dataType == "image" && len(content) > maxStoredImageBytes {
+		return 0
+	}
+
+	a.contentsMu.Lock()
+	defer a.contentsMu.Unlock()
+
+	a.contentNext++
+	id := a.contentNext
+	cp := make([]byte, len(content))
+	copy(cp, content)
+	a.contents[id] = storedContent{dataType: dataType, content: cp}
+	a.contentsOrder = append(a.contentsOrder, id)
+	for len(a.contentsOrder) > maxStoredContents {
+		delete(a.contents, a.contentsOrder[0])
+		a.contentsOrder = a.contentsOrder[1:]
+	}
+	return id
+}
+
+// GetLogContent 按 ID 读取暂存的剪贴板内容（前端渲染缩略图/复制）
+func (a *App) GetLogContent(id int64) map[string]any {
+	a.contentsMu.RLock()
+	defer a.contentsMu.RUnlock()
+
+	sc, ok := a.contents[id]
+	if !ok {
+		return map[string]any{"found": false}
+	}
+	if sc.dataType == "text" {
+		return map[string]any{"found": true, "type": "text", "text": string(sc.content)}
+	}
+	return map[string]any{
+		"found":       true,
+		"type":        "image",
+		"imageBase64": base64.StdEncoding.EncodeToString(sc.content),
+		"size":        len(sc.content),
+	}
+}
+
+// CopyLogContent 把暂存的剪贴板内容写回系统剪贴板（一键复制）
+func (a *App) CopyLogContent(id int64) error {
+	a.contentsMu.RLock()
+	sc, ok := a.contents[id]
+	a.contentsMu.RUnlock()
+	if !ok {
+		return fmt.Errorf("内容已过期，不在暂存队列中")
+	}
+
+	mime := "text/plain"
+	if sc.dataType == "image" {
+		mime = "image/png"
+	}
+	if err := a.clipboardMon.SetClipboard(clipboard.ClipboardData{
+		Type:     sc.dataType,
+		Content:  sc.content,
+		MimeType: mime,
+	}); err != nil {
+		return fmt.Errorf("写入剪贴板失败: %v", err)
+	}
+	return nil
+}
+
 // onLogFull 日志回调（websocket 包 LogCallback 使用）
 func (a *App) onLogFull(e ws.LogEvent) {
 	a.logsMu.Lock()
@@ -293,11 +380,17 @@ func (a *App) onLogFull(e ws.LogEvent) {
 		category = "system"
 	}
 
+	var contentID int64
+	if e.DataType != "" && e.Content != nil {
+		contentID = a.storeContent(e.DataType, e.Content)
+	}
+
 	entry := LogEntry{
 		Level:     e.Level,
 		Message:   e.Message,
 		Preview:   e.Preview,
 		Category:  category,
+		ContentID: contentID,
 		Timestamp: 0,
 	}
 

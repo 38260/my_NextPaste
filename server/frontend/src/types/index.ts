@@ -3,6 +3,7 @@ export interface LogEntry {
   message: string
   preview?: string
   category?: string
+  contentId?: number
   timestamp: number
 }
 
