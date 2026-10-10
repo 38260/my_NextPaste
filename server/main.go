@@ -20,11 +20,12 @@ func main() {
 
 	// 创建并运行应用
 	err := wails.Run(&options.App{
-		Title:     "NextPaste Server",
-		Width:     1200,
-		Height:    800,
-		MinWidth:  900,
-		MinHeight: 600,
+		Title:       "NextPaste Server",
+		Width:       1200,
+		Height:      800,
+		MinWidth:    900,
+		MinHeight:   600,
+		StartHidden: flags.Minimized,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

@@ -226,6 +226,10 @@ func (a *App) startup(ctx context.Context) {
 		case <-trayReady:
 		case <-time.After(5 * time.Second):
 		}
+		// 隐藏启动但托盘不可用时，先显示窗口以保留任务栏恢复入口。
+		if !a.trayReady.Load() {
+			runtime.WindowShow(a.ctx)
+		}
 		a.HideWindow()
 	}
 }
