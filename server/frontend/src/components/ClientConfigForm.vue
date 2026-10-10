@@ -117,7 +117,8 @@ const handleRemoveTemplate = (tpl: ConnTemplate) => {
 
 <template>
   <n-card size="small" title="客户端配置">
-    <n-form label-placement="top" :disabled="isConnected">
+    <div class="config-row">
+    <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isConnected">
       <n-form-item label="服务器地址">
         <n-input v-model:value="localUrl" placeholder="ws://server:8080/ws" />
       </n-form-item>
@@ -126,13 +127,14 @@ const handleRemoveTemplate = (tpl: ConnTemplate) => {
     <n-button
       v-if="!isConnected"
       type="primary"
-      block
+      class="config-action"
       :disabled="!isValid"
       @click="handleConnect"
     >
       连接服务器
     </n-button>
-    <n-button v-else type="error" block @click="handleDisconnect">断开连接</n-button>
+    <n-button v-else type="error" class="config-action" @click="handleDisconnect">断开连接</n-button>
+    </div>
 
     <n-space v-if="templates.length" vertical :size="6" style="margin-top: 16px">
       <n-text depth="3" style="font-size: 12px">
@@ -177,3 +179,18 @@ const handleRemoveTemplate = (tpl: ConnTemplate) => {
     </n-space>
   </n-card>
 </template>
+
+<style scoped>
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .config-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

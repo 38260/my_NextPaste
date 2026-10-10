@@ -55,7 +55,8 @@ const handleStop = () => {
 
 <template>
   <n-card size="small" title="服务器配置">
-    <n-form label-placement="top" :disabled="isRunning">
+    <div class="config-row">
+    <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isRunning">
       <n-form-item label="监听地址">
         <n-input v-model:value="localConfig.address" placeholder="0.0.0.0" />
       </n-form-item>
@@ -68,12 +69,43 @@ const handleStop = () => {
     <n-button
       v-if="!isRunning"
       type="primary"
-      block
+      class="config-action"
       :disabled="!isValid"
       @click="handleStart"
     >
       启动服务
     </n-button>
-    <n-button v-else type="error" block @click="handleStop">停止服务</n-button>
+    <n-button v-else type="error" class="config-action" @click="handleStop">停止服务</n-button>
+    </div>
   </n-card>
 </template>
+
+<style scoped>
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.config-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 12px;
+}
+
+.config-action {
+  align-self: end;
+}
+
+@media (max-width: 600px) {
+  .config-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config-fields {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
+
+}
+</style>
