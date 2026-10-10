@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
   NEllipsis,
   NEmpty,
   NIcon,
+  NInputNumber,
+  NPopover,
   NScrollbar,
+  NSlider,
   NSpace,
   NSwitch,
   NTag,
@@ -21,6 +24,14 @@ import {
 } from '@vicons/ionicons5'
 import { CopyLogContent, GetLogContent } from '../../wailsjs/go/main/App'
 import type { ClipItem } from '../types'
+import {
+  DEFAULT_SIZES,
+  SIZE_LIMITS,
+  clampSize,
+  loadSizes,
+  saveSizes,
+  type ClipSizes
+} from '../utils/clipLayout'
 
 interface Props {
   items: ClipItem[]
@@ -28,6 +39,36 @@ interface Props {
 
 const props = defineProps<Props>()
 const message = useMessage()
+
+// 条目尺寸：文本框与图片各自的宽高由用户调节并持久化
+const sizes = ref<ClipSizes>(loadSizes())
+
+const sizeRows = (Object.keys(DEFAULT_SIZES) as (keyof ClipSizes)[]).map((key) => ({
+  key,
+  label: { textW: '文本框宽', textH: '文本框高', imgW: '图片宽', imgH: '图片高' }[key],
+  min: SIZE_LIMITS[key][0],
+  max: SIZE_LIMITS[key][1]
+}))
+
+const setSize = (key: keyof ClipSizes, value: number | null) => {
+  sizes.value = { ...sizes.value, [key]: clampSize(key, Number(value)) }
+}
+
+const resetSizes = () => {
+  sizes.value = { ...DEFAULT_SIZES }
+}
+
+watch(sizes, (v) => saveSizes(v), { deep: true })
+
+const textStyle = computed(() => ({
+  width: `${sizes.value.textW}px`,
+  maxHeight: `${sizes.value.textH}px`
+}))
+
+const imgStyle = computed(() => ({
+  width: `${sizes.value.imgW}px`,
+  height: `${sizes.value.imgH}px`
+}))
 
 // 内容默认隐藏：全局开关决定所有条目的默认态，单条眼睛按钮只做反向覆盖
 const MASK_KEY = 'np:clipReveal'
@@ -111,6 +152,36 @@ const fmtTime = (ts: number) => {
       <n-space align="center" :size="8">
         <n-text depth="3" style="font-size: 12px">显示内容</n-text>
         <n-switch size="small" :value="revealAll" @update:value="toggleAll" />
+        <n-popover trigger="click" placement="bottom-end" :show-arrow="false" style="width: 292px">
+          <template #trigger>
+            <span>
+              <n-button size="tiny" quaternary title="自定义条目尺寸">尺寸</n-button>
+            </span>
+          </template>
+          <div class="size-form">
+            <div v-for="row in sizeRows" :key="row.key" class="size-row">
+              <n-text depth="3" class="size-label">{{ row.label }}</n-text>
+              <n-slider
+                class="size-slider"
+                :value="sizes[row.key]"
+                :min="row.min"
+                :max="row.max"
+                :step="2"
+                @update:value="(v: number) => setSize(row.key, v)"
+              />
+              <n-input-number
+                size="tiny"
+                class="size-input"
+                :value="sizes[row.key]"
+                :min="row.min"
+                :max="row.max"
+                :show-button="false"
+                @update:value="(v: number | null) => setSize(row.key, v)"
+              />
+            </div>
+            <n-button size="tiny" block secondary @click="resetSizes">恢复默认尺寸</n-button>
+          </div>
+        </n-popover>
       </n-space>
     </template>
 
@@ -147,17 +218,31 @@ const fmtTime = (ts: number) => {
 
         <NEllipsis class="clip-caption" :tooltip="true">{{ item.caption }}</NEllipsis>
 
-        <div v-if="!isShown(item.id)" class="clip-mask" @click="toggleOne(item.id)">
+        <div
+          v-if="!isShown(item.id)"
+          class="clip-mask"
+          :style="item.kind === 'image' ? imgStyle : textStyle"
+          @click="toggleOne(item.id)"
+        >
           <n-icon><LockClosedOutline /></n-icon>
           <span>{{ item.kind === 'image' && item.preview ? item.preview : '内容已隐藏' }}</span>
         </div>
 
         <template v-else>
-          <div v-if="item.kind === 'text'" class="clip-text">
+          <div v-if="item.kind === 'text'" class="clip-text" :style="textStyle">
             {{ texts[item.id] ?? '加载中…' }}
           </div>
-          <img v-else-if="images[item.id]" :src="images[item.id]" class="clip-img" alt="" />
-          <div v-else class="clip-mask"><n-icon><LockClosedOutline /></n-icon><span>加载中…</span></div>
+          <img
+            v-else-if="images[item.id]"
+            :src="images[item.id]"
+            class="clip-img"
+            :style="imgStyle"
+            alt=""
+          />
+          <div v-else class="clip-mask" :style="imgStyle">
+            <n-icon><LockClosedOutline /></n-icon>
+            <span>加载中…</span>
+          </div>
         </template>
       </div>
     </n-scrollbar>
@@ -215,8 +300,10 @@ const fmtTime = (ts: number) => {
 
 .clip-mask {
   margin-top: 6px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 10px;
   border: 1px dashed rgba(128, 128, 128, 0.45);
@@ -236,7 +323,8 @@ const fmtTime = (ts: number) => {
   white-space: pre-wrap;
   word-break: break-all;
   overflow: auto;
-  max-height: 140px;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .clip-img {
@@ -244,7 +332,35 @@ const fmtTime = (ts: number) => {
   display: block;
   border-radius: 6px;
   object-fit: contain;
+  background: rgba(128, 128, 128, 0.1);
+  box-sizing: border-box;
   max-width: 100%;
-  max-height: 140px;
+}
+
+.size-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.size-label {
+  flex: 0 0 56px;
+  font-size: 12px;
+}
+
+.size-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.size-input {
+  flex: 0 0 62px;
 }
 </style>
