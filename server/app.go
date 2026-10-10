@@ -93,10 +93,12 @@ func (a *App) ApplySettings(settingsJSON string) error {
 		s.CloseAction = "minimize"
 	}
 
-	// Autostart support requires a CGO-enabled build on Windows.
-	// This repo's default dev setup has CGO disabled, so we intentionally keep
-	// this as a no-op here; settings are still persisted on the frontend.
-	_ = canUseAutostart
+	// OS 级开机自启：Windows 走注册表 Run 键（纯 Go），
+	// macOS/Linux 沿用 go-autostart，见 autostart_windows.go / autostart_other.go
+	if err := setAutostart(s.AutoStartEnabled, s.AutoStartMode); err != nil {
+		// 开启失败不吞掉：让前端弹错并把开关回滚为注册表真实状态
+		return err
+	}
 
 	a.settingsMu.Lock()
 	a.settings = s
@@ -114,6 +116,20 @@ func (a *App) GetSettings() map[string]any {
 		"autoStartActionEnabled": a.settings.AutoStartActionEnabled,
 		"autoStartMode":          string(a.settings.AutoStartMode),
 		"closeAction":            a.settings.CloseAction,
+	}
+}
+
+// GetAutostartStatus 查询 OS 级开机自启的真实注册状态（以系统为准，而非本地设置副本）
+func (a *App) GetAutostartStatus() map[string]any {
+	enabled, mode, err := isAutostartEnabled()
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+	return map[string]any{
+		"enabled": enabled,
+		"mode":    string(mode),
+		"error":   errMsg,
 	}
 }
 

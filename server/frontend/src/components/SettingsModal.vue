@@ -63,14 +63,16 @@ const settings = computed({
       <div class="settings-section">
         <n-text depth="3" strong class="section-title">启动行为</n-text>
         
-        <!-- TODO: OS 级开机自启未接入，先隐藏该设置项 -->
-        <!--
         <n-form-item label="开机启动">
-          <n-checkbox v-model:checked="settings.autoStartEnabled">
-            随操作系统自动启动
-          </n-checkbox>
+          <div>
+            <n-checkbox v-model:checked="settings.autoStartEnabled">
+              随操作系统自动启动
+            </n-checkbox>
+            <div style="margin-top: 4px; font-size: 12px">
+              <n-text depth="3">开机后静默最小化启动，建议同时开启下方"启动后自动执行"</n-text>
+            </div>
+          </div>
         </n-form-item>
-        -->
 
         <n-form-item label="启动后自动执行">
           <n-checkbox v-model:checked="settings.autoStartActionEnabled">

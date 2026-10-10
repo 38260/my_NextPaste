@@ -8,13 +8,13 @@
 
 ## 1. 需求一：Windows 开机自启动（commit: feat: Windows 开机自启动）
 
-- [ ] T1.1 新增 `server/autostart_windows.go`：注册表 Run 键实现 setAutostart / isAutostartEnabled，写 `"exe" -minimized -autostart=<mode>`，dev 构建检测报错
-- [ ] T1.2 新增 `server/autostart_other.go`：非 Windows 平台沿用 go-autostart，接口同名
-- [ ] T1.3 重构 `server/settings.go`：删除 canUseAutostart no-op，统一模板入口
-- [ ] T1.4 `server/app.go` ApplySettings：AutoStartEnabled 开关注册/删键，mode 变更重注册
-- [ ] T1.5 前端 `AppInner.vue`：watch settings 调用后端 ApplySettings（debounce），打通缺失链路
-- [ ] T1.6 前端 `SettingsModal.vue`：恢复"开机启动"checkbox；打开时从后端读回真实注册状态
-- [ ] T1.7 验证：go build/vet（CGO_ENABLED=0）+ reg query 实测写键/删键
+- [x] T1.1 新增 `server/autostart_windows.go`：注册表 Run 键实现 setAutostart / isAutostartEnabled，写 `"exe" -minimized -autostart=<mode>`，dev 构建检测报错
+- [x] T1.2 新增 `server/autostart_other.go`：非 Windows 平台沿用 go-autostart，接口同名
+- [x] T1.3 重构 `server/settings.go`：删除 canUseAutostart no-op，统一模板入口
+- [x] T1.4 `server/app.go` ApplySettings：AutoStartEnabled 开关注册/删键，mode 变更重注册；新增 GetAutostartStatus 供前端回读真实状态
+- [x] T1.5 前端 `AppInner.vue`：watch settings 调用后端 ApplySettings（debounce 300ms），打通缺失链路
+- [x] T1.6 前端 `SettingsModal.vue`：恢复"开机启动"checkbox（含使用提示文案）
+- [x] T1.7 验证：go build/vet（CGO_ENABLED=0）、darwin/linux 交叉编译、TestAutostartDevGuard（dev 防护拦截+只读查询）全部通过；reg.exe 被沙箱黑名单拦截，注册表写/删真机实测归入验收清单 T6.2
 
 ## 2. 需求二：连接配置模板（commit: feat: 客户端连接配置模板）
 
@@ -66,3 +66,4 @@
 | 日期 | 批次 | 内容与原因 | 涉及文件 | 验证 |
 |---|---|---|---|---|
 | 2026-10-10 | T0.1 | 两张流程图（架构拓扑 + 同步流程）与规划文档、todo 入库 | docs/diagrams/*.svg、docs/feature-plan-2026-10-10.md、todo.md | 浏览器打开 SVG 渲染正常 |
+| 2026-10-10 | T1.x | 开机自启改为纯 Go 注册表实现（弃用需 CGO 的 go-autostart Windows 路径）；补上前端从未调用 ApplySettings 的断链；dev 构建防护防止把临时 exe 写进 Run 键 | server/autostart_windows.go、autostart_other.go、autostart_windows_test.go、settings.go、app.go、go.mod、frontend/{AppInner.vue、SettingsModal.vue、wailsjs/*} | go build/vet CGO_ENABLED=0 通过；darwin/linux 交叉编译通过；TestAutostartDevGuard PASS；npm run build（vue-tsc）通过 |

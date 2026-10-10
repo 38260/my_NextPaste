@@ -18,6 +18,10 @@ export function DisconnectClient() {
   return window['go']['main']['App']['DisconnectClient']();
 }
 
+export function GetAutostartStatus() {
+  return window['go']['main']['App']['GetAutostartStatus']();
+}
+
 export function GetClientStatus() {
   return window['go']['main']['App']['GetClientStatus']();
 }

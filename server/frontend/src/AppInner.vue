@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import {
   EventsOff,
   EventsOn,
   WindowMinimise
 } from '../wailsjs/runtime/runtime'
 import {
+  ApplySettings,
   ClearLogs,
   ConnectClient,
   DisconnectClient,
+  GetAutostartStatus,
   GetClientStatus,
   GetLogs,
   GetServerStatus,
@@ -321,6 +323,41 @@ onMounted(async () => {
 watchEffect(() => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings.value))
 })
+
+const refreshAutostartStatus = async () => {
+  try {
+    const st = (await GetAutostartStatus()) as {
+      enabled: boolean
+      mode: string
+      error: string
+    }
+    if (st.error) return
+    settings.value.autoStartEnabled = st.enabled
+    if (st.mode === 'client' || st.mode === 'server') {
+      settings.value.autoStartMode = st.mode
+    }
+  } catch {
+    // ignore
+  }
+}
+
+let applySettingsTimer: number | undefined
+
+watch(
+  settings,
+  () => {
+    window.clearTimeout(applySettingsTimer)
+    applySettingsTimer = window.setTimeout(async () => {
+      try {
+        await ApplySettings(JSON.stringify(settings.value))
+      } catch (error) {
+        message.error(`开机自启设置未生效：${String(error)}`)
+        await refreshAutostartStatus()
+      }
+    }, 300)
+  },
+  { deep: true }
+)
 </script>
 
 <template>

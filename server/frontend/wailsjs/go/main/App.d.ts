@@ -10,6 +10,8 @@ export function ConnectClient(arg1:string):Promise<void>;
 
 export function DisconnectClient():Promise<void>;
 
+export function GetAutostartStatus():Promise<Record<string, any>>;
+
 export function GetClientStatus():Promise<Record<string, any>>;
 
 export function GetLocalIPs():Promise<Array<string>>;
