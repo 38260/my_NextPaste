@@ -1,0 +1,68 @@
+# NextPaste 桌面端功能迭代 TODO
+
+> 规划文档：docs/feature-plan-2026-10-10.md · 每完成一项勾选并同步 commit
+
+## 0. 前置
+
+- [x] T0.1 两张流程图入库（docs/diagrams/architecture.svg、sync-workflow.svg）
+
+## 1. 需求一：Windows 开机自启动（commit: feat: Windows 开机自启动）
+
+- [ ] T1.1 新增 `server/autostart_windows.go`：注册表 Run 键实现 setAutostart / isAutostartEnabled，写 `"exe" -minimized -autostart=<mode>`，dev 构建检测报错
+- [ ] T1.2 新增 `server/autostart_other.go`：非 Windows 平台沿用 go-autostart，接口同名
+- [ ] T1.3 重构 `server/settings.go`：删除 canUseAutostart no-op，统一模板入口
+- [ ] T1.4 `server/app.go` ApplySettings：AutoStartEnabled 开关注册/删键，mode 变更重注册
+- [ ] T1.5 前端 `AppInner.vue`：watch settings 调用后端 ApplySettings（debounce），打通缺失链路
+- [ ] T1.6 前端 `SettingsModal.vue`：恢复"开机启动"checkbox；打开时从后端读回真实注册状态
+- [ ] T1.7 验证：go build/vet（CGO_ENABLED=0）+ reg query 实测写键/删键
+
+## 2. 需求二：连接配置模板（commit: feat: 客户端连接配置模板）
+
+- [ ] T2.1 前端新增模板工具模块：localStorage `np:connTemplates`，首启写入内置默认模板（builtin 不可删）
+- [ ] T2.2 `ClientConfigForm.vue`：模板 tag 列表渲染，点击=填入 URL+未连接时自动连接
+- [ ] T2.3 `ClientConfigForm.vue`：「保存当前为模板」（默认名=URL host，可改）与用户模板删除按钮
+- [ ] T2.4 验证：模板增删改查、点击切换连接、刷新后持久
+
+## 3. 需求三：日志剪贴板内容预览列（commit: feat: 日志展示剪贴板内容预览）
+
+- [ ] T3.1 `websocket` 包：LogCallback 扩展为 (level, message, preview)，server/client 收发处携带预览，其余传 ""
+- [ ] T3.2 `app.go`：LogEntry 增加 Preview 字段，onLog 适配；文本 120 字符截断（换行→⏎）、图片显示大小
+- [ ] T3.3 前端 `types.ts` LogEntry 增加 preview 字段
+- [ ] T3.4 `LogViewerPanel.vue`：新增"剪贴板内容"列（ellipsis + tooltip，等宽字体）
+- [ ] T3.5 验证：复制文本/截图后日志可见真实内容预览，图片显示大小，无回归
+
+## 4. 需求四：关闭窗口后台常驻（commit: feat: 关闭窗口后台常驻）
+
+- [ ] T4.1 `main.go` 增加 OnBeforeClose 钩子 + `app.go` 实现：closeAction=minimize → WindowMinimise 并阻止关闭；close → 放行
+- [ ] T4.2 前端 `SettingsModal.vue`：恢复"关闭按钮"设置（默认"最小化到任务栏"），设置面板底部加"退出应用"按钮（真退出保底入口）
+- [ ] T4.3 前端 `AppInner.vue`：头部"退出"按钮按 closeAction 分流（minimize→WindowMinimise+提示 / close→Quit），tooltip 文案同步
+- [ ] T4.4 验证：默认模式下点退出/Alt+F4 → 任务栏驻留、同步持续、可点回；设置面板可真正退出；切"退出应用"模式后直接退出
+
+## 5. 需求五：连接地址固定展示 pin（commit: feat: 连接地址固定展示）
+
+- [ ] T5.1 `ConnectionInfoCard.vue`：地址行加"固定/取消固定"图钉操作，localStorage `np:pinnedAddresses` 持久化
+- [ ] T5.2 固定地址置顶 + "已固定"标记；当前枚举不到时灰态显示"当前网络不在此网段"
+- [ ] T5.3 "仅显示固定地址"开关（默认关），开启后过滤实时枚举项（屏蔽虚拟网卡噪音）
+- [ ] T5.4 验证：pin 后重启列表稳定；仅显示固定后噪音消失；排序=固定(pin 顺序)→实时枚举
+
+## 6. 收尾
+
+- [ ] T6.1 全量验证：go vet / go build / npm run build
+- [ ] T6.2 运行时手动回归清单（见规划文档第四节）
+- [ ] T6.3 README 功能特性补充（五项新能力）
+
+## 7. 本轮不做（含原因）
+
+| 项 | 原因 | 前提何时失效 |
+|---|---|---|
+| 系统托盘图标（notification area） | Windows 托盘库（systray 系）依赖 CGO，与仓库 CGO_ENABLED=0 构建约束冲突；需求 4 的任务栏驻留方案已满足"常驻"诉求 | 若未来放开 CGO 或迁移 Wails v3（原生托盘），可重做 |
+| macOS/Linux 自启实测 | 本机无对应环境，仅保证编译通过（go-autostart 非 Windows 路径无 CGO 问题） | 有 mac/Linux 环境时补测 |
+| 局域网 IP 恒定（如 192.168.1.5 不变） | IP 稳定性属网络层：DHCP/MAC 绑定在路由器侧操作，或使用 Tailscale 地址（设备终身不变）；应用层无法承诺 | 不适用——需求 5 的 pin 只解决展示稳定性 |
+| 服务器模式 address/port 模板化 | 需求 2 按用户确认收敛为客户端连接模板；服务器监听配置本就持久化在 localStorage，无多套切换诉求 | 用户提出"多套监听配置切换"时再扩展 |
+| 协议层改动（V1.1 帧格式/V2） | 手机端是原作者上架应用商店的版本，协议改动会导致商店版客户端失联（fork 场景红线） | 自己上架鸿蒙客户端后才允许演进协议 |
+
+## 8. 改动记录
+
+| 日期 | 批次 | 内容与原因 | 涉及文件 | 验证 |
+|---|---|---|---|---|
+| 2026-10-10 | T0.1 | 两张流程图（架构拓扑 + 同步流程）与规划文档、todo 入库 | docs/diagrams/*.svg、docs/feature-plan-2026-10-10.md、todo.md | 浏览器打开 SVG 渲染正常 |
