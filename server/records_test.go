@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,8 +16,15 @@ import (
 func recordTestApp(t *testing.T) *App {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("APPDATA", dir)
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Chdir(dir)
+	t.Setenv("APPDATA", filepath.Join(dir, "old-config"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "old-config"))
+	if err := os.MkdirAll(filepath.Join(dir, "server"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "server", "wails.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	a := NewApp()
 	a.initLogStore()
 	stopRecordTimer(t, a)
@@ -116,5 +125,145 @@ func TestCorruptStoreIsNotOverwritten(t *testing.T) {
 	got, err := os.ReadFile(a.logStorePath)
 	if err != nil || !bytes.Equal(got, raw) {
 		t.Fatal("损坏的原始文件被覆盖")
+	}
+}
+
+func TestRecordLimitRestoresBeforeStartupTrimming(t *testing.T) {
+	a := recordTestApp(t)
+	if err := a.applyMaxLogs(700); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 710; i++ {
+		addRecord(a, "text", []byte(fmt.Sprintf("content-%d", i)))
+	}
+	if err := a.saveLogStore(); err != nil {
+		t.Fatal(err)
+	}
+	b := NewApp()
+	b.initLogStore()
+	if len(b.logs) != 700 || b.maxLogs != 700 || b.GetSettings()["maxLogs"] != 700 {
+		t.Fatalf("启动前未恢复数量设置: logs=%d, max=%d", len(b.logs), b.maxLogs)
+	}
+	if b.GetLogContent(b.logs[699].ContentID)["text"] != "content-10" {
+		t.Fatal("未按顺序保留最新 700 条")
+	}
+	if err := b.applyMaxLogs(50); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.contents) != 50 || b.GetLogContent(1)["found"] != false {
+		t.Fatal("缩小数量后未同步淘汰内容")
+	}
+	files, err := os.ReadDir(filepath.Dir(contentFilePath(b.logStorePath, 1)))
+	if err != nil || len(files) != 50 {
+		t.Fatalf("内容文件未清理: len=%d, err=%v", len(files), err)
+	}
+	c := NewApp()
+	c.initLogStore()
+	if len(c.logs) != 50 || c.maxLogs != 50 {
+		t.Fatal("数量缩小后未立即落盘")
+	}
+	if err := c.ClearLogs(); err != nil {
+		t.Fatal(err)
+	}
+	d := NewApp()
+	d.initLogStore()
+	files, err = os.ReadDir(filepath.Dir(contentFilePath(d.logStorePath, 1)))
+	if err != nil || len(d.logs) != 0 || len(d.contents) != 0 || len(files) != 0 {
+		t.Fatal("清空后重启仍有记录或原文文件")
+	}
+	if id := addRecord(d, "text", []byte("after-clear")); id <= 710 {
+		t.Fatal("清空并重启后复用了旧 ID")
+	}
+	stopRecordTimer(t, b)
+	stopRecordTimer(t, c)
+	stopRecordTimer(t, d)
+}
+
+func TestProjectStorageAndMigrationPreserveOldFiles(t *testing.T) {
+	a := recordTestApp(t)
+	cwd, _ := os.Getwd()
+	if a.logStorePath != filepath.Join(cwd, "data", "logs.json") {
+		t.Fatalf("应保存在项目 data 目录: %s", a.logStorePath)
+	}
+	if got := recordDataDir(filepath.Join(cwd, "server", "build", "bin"), t.TempDir()); got != cwd {
+		t.Fatal("从其他工作目录启动时未找到项目根目录")
+	}
+	base, _ := os.UserConfigDir()
+	oldPath := filepath.Join(base, "NextPaste", "logs.json")
+	if err := os.MkdirAll(filepath.Dir(contentFilePath(oldPath, 7)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLocalFile(contentFilePath(oldPath, 7), []byte("migrated-text")); err != nil {
+		t.Fatal(err)
+	}
+	store := logStore{Logs: []LogEntry{{ContentID: 7}}, MaxLogs: 800, NextContentID: 7, Contents: map[int64]string{7: "text"}}
+	raw, err := json.Marshal(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLocalFile(oldPath, raw); err != nil {
+		t.Fatal(err)
+	}
+	b := NewApp()
+	b.initLogStore()
+	if b.maxLogs != 800 || b.GetLogContent(7)["text"] != "migrated-text" {
+		t.Fatal("旧路径数据迁移失败")
+	}
+	got, err := os.ReadFile(oldPath)
+	if err != nil || !bytes.Equal(got, raw) {
+		t.Fatal("迁移修改了旧位置原文件")
+	}
+	if err := b.ClearLogs(); err != nil {
+		t.Fatal(err)
+	}
+	c := NewApp()
+	c.initLogStore()
+	if len(c.logs) != 0 {
+		t.Fatal("清空后不应再次迁移旧记录")
+	}
+}
+
+func TestWriteFailurePreservesManifestAndContent(t *testing.T) {
+	a := recordTestApp(t)
+	id := addRecord(a, "text", []byte("saved-original"))
+	if err := a.saveLogStore(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(a.logStorePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newID := addRecord(a, "text", []byte("pending-content"))
+	if err := os.Mkdir(contentFilePath(a.logStorePath, newID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.saveLogStore(); err == nil {
+		t.Fatal("内容写入失败应向调用方返回错误")
+	}
+	got, err := os.ReadFile(a.logStorePath)
+	if err != nil || !bytes.Equal(got, raw) || a.GetLogContent(id)["text"] != "saved-original" {
+		t.Fatal("写入失败破坏了已经保存的记录")
+	}
+	if a.GetLogContent(newID)["text"] != "pending-content" {
+		t.Fatal("写入失败时待保存内容被丢弃")
+	}
+}
+
+func TestRetentionIgnoresUnrelatedFiles(t *testing.T) {
+	a := recordTestApp(t)
+	id := addRecord(a, "text", []byte("clear-me"))
+	if err := a.saveLogStore(); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(contentFilePath(a.logStorePath, id))
+	path := filepath.Join(dir, "user-notes.txt")
+	if err := os.WriteFile(path, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ClearLogs(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("清理删除了不属于记录的文件")
 	}
 }

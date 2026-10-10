@@ -156,7 +156,11 @@ func (a *App) ApplySettings(settingsJSON string) error {
 	// 关闭偏好必须先生效；开机自启写入失败不应让窗口行为退回默认值
 	a.settingsMu.Lock()
 	a.settings.CloseAction = s.CloseAction
+	a.settings.MaxLogs = s.MaxLogs
 	a.settingsMu.Unlock()
+	if err := a.applyMaxLogs(s.MaxLogs); err != nil {
+		return err
+	}
 
 	// OS 级开机自启：Windows 走注册表 Run 键（纯 Go），
 	// macOS/Linux 沿用 go-autostart，见 autostart_windows.go / autostart_other.go
@@ -169,8 +173,6 @@ func (a *App) ApplySettings(settingsJSON string) error {
 	a.settings = s
 	a.settingsMu.Unlock()
 
-	// 记录上限即时生效：缩小上限时立刻裁剪并落盘
-	a.applyMaxLogs(s.MaxLogs)
 	return nil
 }
 
@@ -260,9 +262,15 @@ func (a *App) initLogStore() {
 	path, err := resolveLogStorePath()
 	if err != nil {
 		log.Printf("resolve log store path failed: %v", err)
+		a.logStoreErr = err
 		return
 	}
 	a.logStorePath = path
+	if err := migrateLogStore(path); err != nil {
+		a.logStoreErr = err
+		log.Printf("migrate logs failed: %v", err)
+		return
+	}
 
 	store, err := loadLogStore(path)
 	if err != nil {
@@ -291,6 +299,7 @@ func (a *App) initLogStore() {
 	if len(a.logs) > a.maxLogs {
 		a.logs = a.logs[:a.maxLogs]
 	}
+	a.pruneContents()
 	snapshot := make([]LogEntry, len(a.logs))
 	copy(snapshot, a.logs)
 	a.logsMu.Unlock()
@@ -324,11 +333,11 @@ func (a *App) flushLogs() {
 
 func (a *App) saveLogStore() error {
 	path := a.logStorePath
-	if path == "" {
-		return nil
-	}
 	if a.logStoreErr != nil {
 		return fmt.Errorf("原记录文件无法读取，已保留原文件: %w", a.logStoreErr)
+	}
+	if path == "" {
+		return nil
 	}
 
 	// 在取快照前串行化写入，避免较早的快照覆盖清空或缩小数量后的新状态。
@@ -378,17 +387,19 @@ func (a *App) saveLogStore() error {
 		}
 	}
 	a.contentsMu.Unlock()
-	return nil
+	return cleanupContentFiles(path, store)
 }
 
 // applyMaxLogs 更新记录上限并按序裁剪（超出部分删除最早的记录）
-func (a *App) applyMaxLogs(n int) {
+func (a *App) applyMaxLogs(n int) error {
+	n = min(max(n, minMaxLogs), maxMaxLogs)
 	a.logsMu.Lock()
 	a.maxLogs = n
 	trimmed := len(a.logs) > n
 	if trimmed {
 		a.logs = a.logs[:n]
 	}
+	a.pruneContents()
 	snapshot := make([]LogEntry, len(a.logs))
 	copy(snapshot, a.logs)
 	a.logsMu.Unlock()
@@ -396,7 +407,22 @@ func (a *App) applyMaxLogs(n int) {
 	if trimmed && a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "logs:updated", snapshot)
 	}
-	a.markLogsDirty()
+	return a.saveLogStore()
+}
+
+// pruneContents 调用方持有 logsMu，只保留仍被记录引用的内容。
+func (a *App) pruneContents() {
+	retained := make(map[int64]bool, len(a.logs))
+	for _, entry := range a.logs {
+		retained[entry.ContentID] = true
+	}
+	a.contentsMu.Lock()
+	defer a.contentsMu.Unlock()
+	for id := range a.contents {
+		if !retained[id] {
+			delete(a.contents, id)
+		}
+	}
 }
 
 // StartServer 启动 WebSocket 服务器
@@ -511,9 +537,10 @@ func (a *App) GetLogs() []LogEntry {
 }
 
 // ClearLogs 清空日志
-func (a *App) ClearLogs() {
+func (a *App) ClearLogs() error {
 	a.logsMu.Lock()
 	a.logs = make([]LogEntry, 0)
+	a.pruneContents()
 	empty := a.logs
 	a.logsMu.Unlock()
 
@@ -521,7 +548,7 @@ func (a *App) ClearLogs() {
 		runtime.EventsEmit(a.ctx, "logs:updated", empty)
 	}
 	// 清空同样落盘，否则重启后旧记录会重新出现
-	a.flushLogs()
+	return a.saveLogStore()
 }
 
 // storeContent 暂存剪贴板内容，返回内容 ID（不可暂存时返回 0）
@@ -631,6 +658,7 @@ func (a *App) onLogFull(e ws.LogEvent) {
 	a.logs = append([]LogEntry{entry}, a.logs...)
 	if len(a.logs) > a.maxLogs {
 		a.logs = a.logs[:a.maxLogs]
+		a.pruneContents()
 	}
 
 	// 发送事件到前端

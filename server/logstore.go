@@ -7,13 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // logStoreFileName 本地日志记录文件名
 const logStoreFileName = "logs.json"
-
-// logStoreDirName 本地数据目录名（位于用户配置目录下，不污染系统全局配置）
-const logStoreDirName = "NextPaste"
 
 type logStore struct {
 	Logs          []LogEntry       `json:"logs"`
@@ -24,15 +22,76 @@ type logStore struct {
 
 // resolveLogStorePath 返回本地记录文件的绝对路径（必要时创建目录）
 func resolveLogStorePath() (string, error) {
-	base, err := os.UserConfigDir()
+	exe, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(base, logStoreDirName)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(recordDataDir(filepath.Dir(exe), cwd), "data")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, logStoreFileName), nil
+}
+
+// recordDataDir 正式版从程序位置寻找项目根目录，开发时回退到工作目录。
+func recordDataDir(exeDir, cwd string) string {
+	for _, start := range []string{exeDir, cwd} {
+		for dir := start; ; dir = filepath.Dir(dir) {
+			if info, err := os.Stat(filepath.Join(dir, "server", "wails.json")); err == nil && !info.IsDir() {
+				return dir
+			}
+			if filepath.Dir(dir) == dir {
+				break
+			}
+		}
+	}
+	return exeDir // 独立分发时数据与程序放在同一目录。
+}
+
+// migrateLogStore 只在新位置没有记录时复制旧数据，保留旧位置原文件。
+func migrateLogStore(path string) error {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		return err
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+	oldPath := filepath.Join(base, "NextPaste", logStoreFileName)
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	store, err := loadLogStore(oldPath)
+	if err != nil {
+		return fmt.Errorf("读取旧位置记录失败，原文件已保留: %w", err)
+	}
+	for id := range store.Contents {
+		data, err := os.ReadFile(contentFilePath(oldPath, id))
+		if os.IsNotExist(err) {
+			delete(store.Contents, id)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(contentFilePath(path, id)), 0o700); err != nil {
+			return err
+		}
+		if err := writeLocalFile(contentFilePath(path, id), data); err != nil {
+			return err
+		}
+	}
+	raw, err := json.Marshal(store)
+	if err != nil {
+		return err
+	}
+	return writeLocalFile(path, raw)
 }
 
 // loadLogsFromDisk 从本地文件读取记录；文件不存在时返回空列表且不报错
@@ -117,4 +176,31 @@ func writeLocalFile(path string, data []byte) error {
 
 func contentFilePath(path string, id int64) string {
 	return filepath.Join(filepath.Dir(path), "contents", strconv.FormatInt(id, 10)+".bin")
+}
+
+// cleanupContentFiles 仅清理本应用生成的数字编号文件，且必须在记录列表保存成功后执行。
+func cleanupContentFiles(path string, store logStore) error {
+	dir := filepath.Dir(contentFilePath(path, 1))
+	files, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if !file.Type().IsRegular() || filepath.Ext(file.Name()) != ".bin" {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimSuffix(file.Name(), ".bin"), 10, 64)
+		if err != nil || id <= 0 || id > store.NextContentID {
+			continue
+		}
+		if _, retained := store.Contents[id]; !retained {
+			if err := os.Remove(filepath.Join(dir, file.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

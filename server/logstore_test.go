@@ -15,7 +15,7 @@ func sampleLogs(n int) []LogEntry {
 			Message:   "msg",
 			Preview:   "preview",
 			Category:  "clipboard",
-			Timestamp: int64(i),
+			Timestamp: int64(n - i),
 		})
 	}
 	return logs
@@ -73,17 +73,17 @@ func TestLoadLogsCorruptedFallsBackToEmpty(t *testing.T) {
 
 func TestApplyMaxLogsTrimsOldest(t *testing.T) {
 	// logs 按时间倒序存放（最新在前），超量时从尾部删除最早记录
-	a := &App{logs: sampleLogs(10), maxLogs: 10}
-	a.applyMaxLogs(4)
+	a := &App{logs: sampleLogs(60), maxLogs: 60}
+	a.applyMaxLogs(50)
 
-	if len(a.logs) != 4 {
-		t.Fatalf("len = %d, want 4", len(a.logs))
+	if len(a.logs) != 50 {
+		t.Fatalf("len = %d, want 50", len(a.logs))
 	}
-	if a.logs[0].Timestamp != 0 || a.logs[3].Timestamp != 3 {
-		t.Fatalf("kept window = [%d..%d], want [0..3]", a.logs[0].Timestamp, a.logs[3].Timestamp)
+	if a.logs[0].Timestamp != 60 || a.logs[49].Timestamp != 11 {
+		t.Fatalf("kept window = [%d..%d], want [60..11]", a.logs[0].Timestamp, a.logs[49].Timestamp)
 	}
-	if a.maxLogs != 4 {
-		t.Fatalf("maxLogs = %d, want 4", a.maxLogs)
+	if a.maxLogs != 50 {
+		t.Fatalf("maxLogs = %d, want 50", a.maxLogs)
 	}
 }
 
