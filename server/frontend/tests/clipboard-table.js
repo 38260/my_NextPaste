@@ -38,6 +38,11 @@ async (page) => {
     }}}
   })
   await page.goto('http://127.0.0.1:4175/')
+  await page.evaluate(() => {
+    localStorage.removeItem('np:clipReveal')
+    localStorage.removeItem('np:clipSizes')
+  })
+  await page.reload()
   const table = page.locator('.log-panel')
   await table.waitFor()
   assert((await page.getByRole('columnheader').allTextContents()).join(',') === '级别,分类,剪贴板内容,时间', '表头不符合预期')
@@ -91,7 +96,14 @@ async (page) => {
     }
   }
 
-  // 切换分类后允许描述连接状态；无原文的旧剪贴板预览仍遵守全局隐藏。
+  await table.locator('.n-select').first().click()
+  await page.getByText('全部分类', {exact:true}).click()
+  await table.getByText('连接已建立', {exact:true}).waitFor()
+  await table.locator('.n-select').first().click()
+  await page.getByText('剪贴板', {exact:true}).last().click()
+  assert(!(await table.innerText()).includes('连接已建立'), '分类筛选未生效')
+
+  // 无原文的旧剪贴板预览仍遵守全局隐藏。
   await page.evaluate(() => window.clipTest.callbacks['logs:updated']([
     {level:'INFO',category:'clipboard',contentId:0,preview:'旧记录预览',message:'旧事件',timestamp:1800000000010}
   ]))

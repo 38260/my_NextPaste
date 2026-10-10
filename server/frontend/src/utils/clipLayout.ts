@@ -44,4 +44,3 @@ export function saveSizes(sizes: ClipSizes) {
 export function clampSize(key: keyof ClipSizes, value: number) {
   return clamp(Number(value), SIZE_LIMITS[key])
 }
-
