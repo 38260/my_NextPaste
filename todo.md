@@ -1,4 +1,4 @@
-# NextPaste 桌面端功能迭代 TODO
+# 传笺 ChuanJian 桌面端功能迭代 TODO
 
 > 规划文档：docs/feature-plan-2026-10-10.md · 每完成一项勾选并同步 commit
 
@@ -70,6 +70,14 @@
 - [x] T6.2 `LogViewerPanel.vue`：compact 模式（<1100 触发）列宽自适应，内容列放开为弹性宽度
 - [x] T6.3 验证：vue-tsc + vite build 通过
 
+## 13. 需求九：品牌整理（传笺 logo 入库 + 应用图标）（commit: chore(brand): 传笺 logo 入库并接入 README 与桌面端图标）
+
+- [x] T9.1 抠底：生成图背景里烘焙了"假透明棋盘格"（浅灰 236 / 近白 255 交替）与投影，用「低饱和+高亮度候选 → 取与图像边框连通的连通分量」精确分离外部背景（图内浅色信笺/缎带不被掏空），再羽化 1.1px 并对白底反预乘，消除边缘浅色描边
+- [x] T9.2 品牌资源入库 `docs/assets/`：logo.png（1024 主文件，RGBA 透明）/ logo-512.png（295KB）/ logo-256.png（README 用，87KB）
+- [x] T9.3 应用图标：`server/build/appicon.png`（1024，四周留 6% 呼吸位）+ `server/build/windows/icon.ico`（16/24/32/48/64/128/256 七档）；`.gitignore` 增加例外把图标源文件纳入版本管理（`server/build/bin/` 仍忽略）
+- [x] T9.4 README：居中头图 + 传笺命名与 Slogan + fork 归属说明；项目结构树补 `docs/assets/`；修正 Go 版本号（1.23→1.24）与失效的许可证链接
+- [x] T9.5 验证：透明底在浅底/深底以及 16–256px 小尺寸下渲染自查通过（无棋盘底、无白圈、小尺寸可辨识）
+
 ## 7. 本轮不做（含原因）
 
 | 项 | 原因 | 前提何时失效 |
@@ -94,6 +102,7 @@
 | 2026-10-10 | T7.x | 日志分类：LogCallback 重构为 LogEvent 结构体（顺带打通 DataType/Content 携带，为需求八铺路）；分类判定放在事件源头（ws 默认 connection / logClip=clipboard / app 内部=system），不猜消息文本 | internal/websocket/{server.go、client.go、preview.go、preview_test.go}、app.go、frontend/{types、models.ts、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过 |
 | 2026-10-10 | T8.x | 剪贴板内容暂存（20 条环，防内存膨胀）；图片日志懒加载缩略图（contentId 缓存）；一键复制走后端 SetClipboard 写回系统剪贴板（复制后等同本地复制，会正常同步到对端） | app.go、frontend/{wailsjs/*、types、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过；运行时实测归入验收清单 |
 | 2026-10-10 | T6(响应式) | 响应式布局：窗口宽度驱动侧栏（420/380/320 三档断点）与日志列宽（compact<1100 内容列弹性化），最小窗口 900px 下仍可读 | frontend/{AppInner.vue、LogViewerPanel.vue} | vue-tsc + vite build 通过；拖动窗口实测归入验收清单 |
+| 2026-10-10 | T9.x | 品牌整理：传笺 logo 去棋盘底入库（docs/assets/），README 换头图并统一命名为传笺 ChuanJian；桌面端应用图标（appicon.png / windows/icon.ico）替换为传笺 logo；.gitignore 放行图标源文件 | docs/assets/*.png、README.md、server/build/appicon.png、server/build/windows/icon.ico、.gitignore | 透明底与多尺寸渲染自查通过；wails build 重建 exe，图标生效 |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 

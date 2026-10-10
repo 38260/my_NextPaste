@@ -1,6 +1,15 @@
-# NextPaste
+<div align="center">
+  <img src="docs/assets/logo-256.png" width="150" alt="传笺 ChuanJian Logo" />
+  <h1>传笺 · ChuanJian</h1>
+  <p><strong>让文字与图像在不同设备之间自由流转的跨设备剪贴板同步工具</strong></p>
+  <p><em>让信息自由传递，让设备不再设限。</em></p>
+</div>
 
-**NextPaste** 是一款旨在打破设备壁垒的跨设备剪切板同步工具。通过 WebSocket 协议，实现 HarmonyOS Next 设备与 Windows/Mac/Linux 设备之间文本、图片的实时无缝流转。
+---
+
+**传笺（ChuanJian）** 是一款旨在打破设备壁垒的跨设备剪切板同步工具。通过 WebSocket 协议，实现 HarmonyOS Next 设备与 Windows/Mac/Linux 设备之间文本、图片的实时无缝流转。
+
+> 本项目基于开源的 **NextPaste** 二次开发（fork），沿用其通信协议与整体架构；桌面端在其之上补充了开机自启、连接模板、日志内容预览与分类、图片缩略图一键复制、关闭后台常驻、连接地址固定与响应式布局等能力。
 
 ---
 
@@ -9,7 +18,7 @@
 本项目采用单仓风格管理，客户端与服务端代码共存：
 
 ```text
-NextPaste/
+传笺 ChuanJian/
 ├── entry/                # HarmonyOS 客户端 (ArkTS)
 ├── server/               # Windows/Mac/Linux 桌面端 (Wails: Go + Vue3)
 │   ├── frontend/         # 桌面端管理界面 (Vue3 + TS)
@@ -22,7 +31,11 @@ NextPaste/
 │   ├── main.go           # 服务器入口
 │   ├── relay.go          # 中继逻辑
 │   └── README.md         # 中继服务器文档
-├── docs/                 # 项目文档及通信协议
+├── docs/                 # 项目文档、协议说明、流程图与品牌资源
+│   ├── protocol.md       # 通信协议 V1.0
+│   ├── protocol_v1.1.md  # 通信协议 V1.1
+│   ├── diagrams/         # 架构图 / 同步流程图 (SVG)
+│   └── assets/           # 品牌资源 (logo)
 └── README.md
 
 ```
@@ -76,7 +89,7 @@ NextPaste/
 ### 核心技术栈
 
 * **Client**: HarmonyOS SDK, ArkUI, @ohos.net.webSocket, PersistentStorage.
-* **Server**: Go 1.23, Wails v2, gorilla/websocket, `github.com/Okysu/clipboard`.
+* **Server**: Go 1.24, Wails v2, gorilla/websocket, `github.com/Okysu/clipboard`.
 
 ---
 
@@ -114,7 +127,7 @@ NextPaste/
 ### 服务端部署
 
 1. 进入 `server` 目录：`cd server`
-2. 安装环境依赖（需 Go 1.23+, Node.js 16+, Wails CLI）。
+2. 安装环境依赖（需 Go 1.24+, Node.js 18+, Wails CLI）。
 3. 编译运行：
 ```bash
 wails dev  # 开发模式
@@ -150,11 +163,11 @@ wails build # 构建正式版
 
 ## 贡献与许可
 
-* **许可证**：本项目基于 [MIT License](https://www.google.com/search?q=LICENSE) 开源，仅供学习和研究使用。
+* **许可证**：本项目基于 **MIT License** 开源（沿用上游 NextPaste 的许可），仅供学习和研究使用。
 * **贡献**：欢迎提交 Issue 或 Pull Request 来改进跨平台图片兼容性或其他功能。
 
 ---
 
-**NextPaste** —— 让你的剪切板触手可及。
+**传笺 ChuanJian** —— 让信息自由传递，让设备不再设限。
 
 ---
