@@ -147,6 +147,21 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// beforeClose 拦截窗口关闭：关闭行为为 minimize（默认）时，
+// 关窗/Alt+F4 只最小化到任务栏驻留，进程与同步继续运行；
+// runtime.Quit() 不经过此钩子，是设置面板"退出应用"的保底退出路径
+func (a *App) beforeClose(ctx context.Context) bool {
+	a.settingsMu.RLock()
+	action := a.settings.CloseAction
+	a.settingsMu.RUnlock()
+
+	if action != "close" {
+		runtime.WindowMinimise(a.ctx)
+		return true
+	}
+	return false
+}
+
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
 	a.StopServer()

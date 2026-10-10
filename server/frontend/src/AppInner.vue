@@ -228,9 +228,18 @@ const handleMinimize = () => {
   WindowMinimise()
 }
 
-const handleQuit = async () => {
-  await Quit()
+const handleCloseOrQuit = async () => {
+  if (settings.value.closeAction === 'close') {
+    await Quit()
+    return
+  }
+  WindowMinimise()
+  message.info('已最小化到任务栏，后台保持同步')
 }
+
+const closeTip = computed(() =>
+  settings.value.closeAction === 'close' ? '退出' : '最小化到任务栏'
+)
 
 onMounted(() => {
   loadConfig()
@@ -427,11 +436,11 @@ watch(
 
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button quaternary size="small" type="error" @click="handleQuit">
+                <n-button quaternary size="small" type="error" @click="handleCloseOrQuit">
                   <template #icon><n-icon><CloseOutline /></n-icon></template>
                 </n-button>
               </template>
-              退出
+              {{ closeTip }}
             </n-tooltip>
           </n-space>
         </div>

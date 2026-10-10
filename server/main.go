@@ -31,6 +31,7 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 248, G: 250, B: 252, A: 1}, // 浅色背景 #f8fafc
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
+		OnBeforeClose:    app.beforeClose,
 		// 无边框窗口，使用自定义标题栏
 		Frameless: true,
 		Bind: []interface{}{

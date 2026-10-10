@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  NModal,
+  NButton,
+  NCheckbox,
+  NDivider,
   NForm,
   NFormItem,
-  NCheckbox,
+  NModal,
   NRadio,
   NRadioGroup,
-  NDivider,
+  NSpace,
   NText,
 } from 'naive-ui'
+import { Quit } from '../../wailsjs/go/main/App'
 
 // ... 类型定义保持不变 ...
 type AutoStartMode = 'server' | 'client'
@@ -42,6 +45,14 @@ const settings = computed({
   get: () => props.settings,
   set: (v: Settings) => emit('update:settings', v)
 })
+
+const handleQuitApp = async () => {
+  try {
+    await Quit()
+  } catch {
+    // ignore
+  }
+}
 </script>
 
 <template>
@@ -92,8 +103,6 @@ const settings = computed({
         </n-form-item>
       </div>
 
-      <!-- TODO: OS 级托盘/关闭行为未接入，先隐藏该设置项 -->
-      <!--
       <n-divider style="margin: 16px 0" />
 
       <div class="settings-section">
@@ -102,20 +111,28 @@ const settings = computed({
         <n-form-item label="关闭按钮">
           <n-radio-group v-model:value="settings.closeAction" name="action">
             <n-space vertical :size="4">
-              <n-radio value="minimize">最小化到系统托盘</n-radio>
+              <n-radio value="minimize">最小化到任务栏（后台保持同步）</n-radio>
               <n-radio value="close">退出应用程序</n-radio>
             </n-space>
           </n-radio-group>
         </n-form-item>
+
+        <n-form-item label="说明">
+          <n-text depth="3" style="font-size: 12px">
+            最小化驻留时，任务栏图标可随时点回窗口；需要完全退出请点右下角"退出应用"
+          </n-text>
+        </n-form-item>
       </div>
-      -->
     </n-form>
 
     <template #footer>
-      <div style="display: flex; justify-content: flex-end">
+      <div style="display: flex; justify-content: space-between; align-items: center">
         <n-text depth="3" style="font-size: 12px">
           修改将实时保存并生效
         </n-text>
+        <n-button size="small" type="error" secondary @click="handleQuitApp">
+          退出应用
+        </n-button>
       </div>
     </template>
   </n-modal>
