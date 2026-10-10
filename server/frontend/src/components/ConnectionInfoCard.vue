@@ -3,8 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
+  NCheckbox,
   NCode,
   NEmpty,
+  NIcon,
   NList,
   NListItem,
   NModal,
@@ -16,7 +18,7 @@ import {
 } from 'naive-ui'
 import { GetLocalIPs } from '../../wailsjs/go/main/App'
 import QRCode from 'qrcode'
-import { CopyOutline, ScanOutline } from '@vicons/ionicons5'
+import { CopyOutline, PinOutline, ScanOutline } from '@vicons/ionicons5'
 
 interface Props {
   isRunning: boolean
@@ -40,6 +42,61 @@ const qrCodeUrl = ref('')
 const currentQrAddress = ref('')
 
 const title = computed(() => (props.mode === 'client' ? '服务器地址' : '连接信息'))
+
+const PINNED_KEY = 'np:pinnedAddresses'
+
+const pinnedAddresses = ref<string[]>(loadPinned())
+const onlyPinned = ref(false)
+
+function loadPinned(): string[] {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function savePinned(list: string[]) {
+  pinnedAddresses.value = list
+  localStorage.setItem(PINNED_KEY, JSON.stringify(list))
+}
+
+const isPinned = (addr: string) => pinnedAddresses.value.includes(addr)
+
+const togglePin = (addr: string) => {
+  if (isPinned(addr)) {
+    savePinned(pinnedAddresses.value.filter((a) => a !== addr))
+    message.info('已取消固定该地址')
+  } else {
+    savePinned([...pinnedAddresses.value, addr])
+    message.success('已固定，重启后仍置顶显示')
+  }
+}
+
+interface DisplayAddress {
+  addr: string
+  pinned: boolean
+  online: boolean
+}
+
+// 固定地址（pin 顺序）置顶；枚举不到的固定地址保留显示并灰态标注
+const displayAddresses = computed<DisplayAddress[]>(() => {
+  const live = addresses.value
+  const pinnedItems: DisplayAddress[] = pinnedAddresses.value.map((addr) => ({
+    addr,
+    pinned: true,
+    online: live.includes(addr)
+  }))
+  if (onlyPinned.value) {
+    return pinnedItems
+  }
+  const liveItems: DisplayAddress[] = live
+    .filter((addr) => !isPinned(addr))
+    .map((addr) => ({ addr, pinned: false, online: true }))
+  return [...pinnedItems, ...liveItems]
+})
 
 const loadAddresses = async () => {
   if (props.mode === 'client') {
@@ -103,6 +160,12 @@ onMounted(() => {
 
 <template>
   <n-card size="small" :title="title">
+    <template v-if="mode === 'server'" #header-extra>
+      <n-checkbox v-model:checked="onlyPinned" size="small">
+        <n-text depth="3" style="font-size: 12px">仅显示固定地址</n-text>
+      </n-checkbox>
+    </template>
+
     <template v-if="!isRunning && mode === 'server'">
       <n-empty description="服务器未运行" />
     </template>
@@ -118,14 +181,39 @@ onMounted(() => {
         </div>
 
         <n-scrollbar style="max-height: 220px">
-          <n-list v-if="addresses.length" bordered>
-            <n-list-item v-for="addr in addresses" :key="addr">
+          <n-list v-if="displayAddresses.length" bordered>
+            <n-list-item v-for="item in displayAddresses" :key="item.addr">
               <n-space align="center" justify="space-between" style="width: 100%">
-                <n-code :code="addr" language="text" />
+                <div style="min-width: 0">
+                  <n-code
+                    :code="item.addr"
+                    language="text"
+                    :style="item.online ? '' : 'opacity: 0.4'"
+                  />
+                  <div v-if="!item.online" style="margin-top: 2px">
+                    <n-text depth="3" style="font-size: 12px">当前网络不在此网段</n-text>
+                  </div>
+                </div>
                 <n-space :size="6">
+                  <n-tooltip v-if="mode === 'server'" trigger="hover">
+                    <template #trigger>
+                      <n-button
+                        size="tiny"
+                        quaternary
+                        :type="item.pinned ? 'primary' : 'default'"
+                        @click="togglePin(item.addr)"
+                      >
+                        <template #icon>
+                          <n-icon><PinOutline /></n-icon>
+                        </template>
+                      </n-button>
+                    </template>
+                    {{ item.pinned ? '取消固定' : '固定此地址' }}
+                  </n-tooltip>
+
                   <n-tooltip trigger="hover">
                     <template #trigger>
-                      <n-button size="tiny" quaternary @click="showQrCode(addr)">
+                      <n-button size="tiny" quaternary @click="showQrCode(item.addr)">
                         <template #icon>
                           <n-icon><ScanOutline /></n-icon>
                         </template>
@@ -136,7 +224,7 @@ onMounted(() => {
 
                   <n-tooltip trigger="hover">
                     <template #trigger>
-                      <n-button size="tiny" quaternary type="primary" @click="copyAddress(addr)">
+                      <n-button size="tiny" quaternary type="primary" @click="copyAddress(item.addr)">
                         <template #icon>
                           <n-icon><CopyOutline /></n-icon>
                         </template>
@@ -149,7 +237,10 @@ onMounted(() => {
             </n-list-item>
           </n-list>
 
-          <n-empty v-else description="正在获取网络地址..." />
+          <n-empty
+            v-if="!displayAddresses.length"
+            :description="onlyPinned ? '暂无固定地址，点击地址旁的图钉固定' : '正在获取网络地址...'"
+          />
         </n-scrollbar>
       </n-space>
     </template>
