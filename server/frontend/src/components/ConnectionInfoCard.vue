@@ -4,7 +4,6 @@ import {
   NButton,
   NCard,
   NCheckbox,
-  NCode,
   NEmpty,
   NIcon,
   NList,
@@ -25,12 +24,14 @@ interface Props {
   port?: number
   mode?: 'server' | 'client'
   serverUrl?: string
+  listMaxHeight?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'server',
   serverUrl: '',
-  port: 8080
+  port: 8080,
+  listMaxHeight: 220
 })
 
 const message = useMessage()
@@ -180,16 +181,14 @@ onMounted(() => {
           <n-text depth="3">{{ mode === 'client' ? '服务器地址' : '可用连接地址' }}</n-text>
         </div>
 
-        <n-scrollbar style="max-height: 220px">
+        <n-scrollbar :style="`max-height: ${listMaxHeight}px`">
           <n-list v-if="displayAddresses.length" bordered>
             <n-list-item v-for="item in displayAddresses" :key="item.addr">
               <n-space align="center" justify="space-between" style="width: 100%">
                 <div style="min-width: 0">
-                  <n-code
-                    :code="item.addr"
-                    language="text"
-                    :style="item.online ? '' : 'opacity: 0.4'"
-                  />
+                  <span class="addr-text" :style="item.online ? '' : 'opacity: 0.4'">
+                    {{ item.addr }}
+                  </span>
                   <div v-if="!item.online" style="margin-top: 2px">
                     <n-text depth="3" style="font-size: 12px">当前网络不在此网段</n-text>
                   </div>
@@ -253,3 +252,17 @@ onMounted(() => {
     </n-modal>
   </n-card>
 </template>
+
+<style scoped>
+/* n-code 需要额外配置 hljs，未配置时地址文字根本不渲染，这里改为自带样式的等宽文本 */
+.addr-text {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.14);
+  word-break: break-all;
+}
+</style>

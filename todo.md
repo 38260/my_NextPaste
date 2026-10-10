@@ -90,7 +90,11 @@
   - 远程内容写回系统剪贴板触发本地监听回声 → `markWritten` + `isSelfEcho` 在 `onClipboardChange(Client)` 入口吞掉（不记日志也不二次广播，断掉两端来回）
   - 顺带修 `LogEntry.Timestamp` 恒为 0（原来所有行显示的都是"当前时刻"，第三列需要每条真实时间）
   - 验证：go build/vet/test 通过，5 项台账单测 PASS
-- [ ] T10.2 工作模式区移至顶部条（可折叠），主体回归应用日志 — commit: feat: 工作模式区移至顶部
+- [x] T10.2 工作模式区移至顶部条（可折叠），主体回归应用日志 — commit: feat: 工作模式区移至顶部
+  - `AppInner.vue`：删掉 `n-layout has-sider` 左栏，改为「顶部条 + 主体」flex 列；条内并排 工作模式 tabs / 配置表单 / 连接信息，`np:workBand` 持久化收起态，收起后只留 tabs + 一行状态摘要
+  - `ConnectionInfoCard.vue`：新增 `listMaxHeight`（顶部条内压到 150px）
+  - 顺带修真 bug：地址行用 `n-code` 但未配置 hljs，控制台报 `[naive/code]: hljs is not set.` 且**地址文字根本不渲染**（只剩三个操作图标）→ 改自带样式的等宽文本
+  - 验证：vue-tsc 通过；浏览器 dev 预览实测（展开/收起、地址三行可见、日志满宽）通过
 - [ ] T10.3 第三列「剪切板内容」面板：条目默认隐藏内容（文本打码、图片遮罩），单条眼睛按钮揭示 + 全局显示开关；日志表移除「剪贴板内容」列 — commit: feat: 剪切板内容独立第三列（默认隐藏）
 - [ ] T10.4 条目尺寸自定义：文本框宽/高、图片宽/高四项可调（滑块 + 数字输入），第三列宽度可拖，配置持久化 `np:clipLayout`，一键恢复默认 — commit: feat: 剪切板条目尺寸可调
 - [ ] T10.5 图片点击放大预览：modal 大图 + 缩放（适配窗口 / 1:1 / 滚轮）+ Esc 关闭 + 原始尺寸与体积标注 — commit: feat: 剪切板图片点击放大预览

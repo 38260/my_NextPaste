@@ -267,19 +267,31 @@ const colorScheme = computed<ColorScheme>({
 
 const settingsOpen = ref(false)
 
-// 响应式布局：窗口宽度驱动侧栏与日志列宽
+// 响应式布局：窗口宽度驱动日志表列宽与顶部条形态
 const windowWidth = ref(window.innerWidth)
 const onWindowResize = () => {
   windowWidth.value = window.innerWidth
 }
 
-const siderWidth = computed(() => {
-  if (windowWidth.value < 1000) return 320
-  if (windowWidth.value < 1200) return 380
-  return 420
-})
-
 const compactMode = computed(() => windowWidth.value < 1100)
+
+// 顶部工作模式条：展开时含配置与连接信息，收起时只留模式切换
+const BAND_KEY = 'np:workBand'
+const bandCollapsed = ref(localStorage.getItem(BAND_KEY) === 'collapsed')
+
+const toggleBand = () => {
+  bandCollapsed.value = !bandCollapsed.value
+  localStorage.setItem(BAND_KEY, bandCollapsed.value ? 'collapsed' : 'expanded')
+}
+
+const bandSummary = computed(() => {
+  if (mode.value === 'server') {
+    return status.value.isRunning
+      ? `服务器运行中 · 端口 ${config.value.port} · 客户端 ${status.value.clientCount}`
+      : '服务器未启动'
+  }
+  return clientStatus.value.isConnected ? '已连接服务器' : '客户端未连接'
+})
 
 onMounted(() => {
   window.addEventListener('resize', onWindowResize)
@@ -469,54 +481,68 @@ watch(
       </div>
     </n-layout-header>
 
-    <n-layout has-sider style="height: calc(100vh - 56px)">
-      <n-layout-sider bordered :width="siderWidth" content-style="padding: 16px">
-        <n-space vertical :size="16">
-          <n-card size="small" title="工作模式">
-            <n-tabs
-              type="segment"
-              :value="mode"
-              :disabled="hasActiveConnection"
-              @update:value="(v: string | number) => switchMode(v as any)"
-            >
-              <n-tab name="server">服务器</n-tab>
-              <n-tab name="client">客户端</n-tab>
-            </n-tabs>
-          </n-card>
+    <div class="page">
+      <div class="work-band">
+        <div class="band-mode">
+          <n-text depth="3" class="band-label">工作模式</n-text>
+          <n-tabs
+            type="segment"
+            :value="mode"
+            :disabled="hasActiveConnection"
+            style="width: 180px"
+            @update:value="(v: string | number) => switchMode(v as any)"
+          >
+            <n-tab name="server">服务器</n-tab>
+            <n-tab name="client">客户端</n-tab>
+          </n-tabs>
+        </div>
 
-          <ServerConfigForm
-            v-if="mode === 'server'"
-            :config="config"
-            :is-running="status.isRunning"
-            @start="handleStart"
-            @stop="handleStop"
-            @update:config="saveConfig"
-          />
+        <div v-if="bandCollapsed" class="band-summary">
+          <n-text depth="3">{{ bandSummary }}</n-text>
+        </div>
 
-          <ClientConfigForm
-            v-if="mode === 'client'"
-            :url="clientUrl"
-            :is-connected="clientStatus.isConnected"
-            @connect="handleConnect"
-            @disconnect="handleDisconnect"
-            @update:url="saveClientUrl"
-          />
+        <template v-else>
+          <div class="band-config">
+            <ServerConfigForm
+              v-if="mode === 'server'"
+              :config="config"
+              :is-running="status.isRunning"
+              @start="handleStart"
+              @stop="handleStop"
+              @update:config="saveConfig"
+            />
+
+            <ClientConfigForm
+              v-if="mode === 'client'"
+              :url="clientUrl"
+              :is-connected="clientStatus.isConnected"
+              @connect="handleConnect"
+              @disconnect="handleDisconnect"
+              @update:url="saveClientUrl"
+            />
+          </div>
 
           <ConnectionInfoCard
             v-if="mode === 'server' || (mode === 'client' && clientStatus.isConnected)"
+            class="band-conn"
+            :list-max-height="150"
             :is-running="hasActiveConnection"
             :client-count="status.clientCount"
             :port="config.port"
             :mode="mode"
             :server-url="clientUrl"
           />
-        </n-space>
-      </n-layout-sider>
+        </template>
 
-      <n-layout-content content-style="padding: 16px">
+        <n-button class="band-toggle" size="small" quaternary @click="toggleBand">
+          {{ bandCollapsed ? '展开配置' : '收起配置' }}
+        </n-button>
+      </div>
+
+      <div class="page-body">
         <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
-      </n-layout-content>
-    </n-layout>
+      </div>
+    </div>
 
     <SettingsModal
       v-model:show="settingsOpen"
@@ -548,5 +574,62 @@ watch(
 .header-right {
   position: relative;
   z-index: 1;
+}
+
+.page {
+  height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.work-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.24);
+}
+
+.band-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.band-label {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.band-config {
+  flex: 0 1 320px;
+  min-width: 260px;
+}
+
+.band-conn {
+  flex: 1 1 360px;
+  min-width: 300px;
+}
+
+.band-summary {
+  flex: 1 1 auto;
+  align-self: center;
+  font-size: 13px;
+}
+
+.band-toggle {
+  margin-left: auto;
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+.page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
 }
 </style>
