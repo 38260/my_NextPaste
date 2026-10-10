@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,11 +34,6 @@ type storedContent struct {
 	content  []byte
 }
 
-const (
-	maxStoredContents   = 20
-	maxStoredImageBytes = 20 * 1024 * 1024 // 图片超过 20MB 不暂存（日志仍正常记录）
-)
-
 // 本地记录条数限制（可在设置中调整，超出后按时间顺序删除最早的记录）
 const (
 	defaultMaxLogs = 500
@@ -61,15 +58,15 @@ type App struct {
 	settingsMu sync.RWMutex
 	settings   Settings
 
-	contents      map[int64]storedContent
-	contentsOrder []int64
-	contentsMu    sync.RWMutex
-	contentNext   int64
+	contents    map[int64]storedContent
+	contentsMu  sync.RWMutex
+	contentNext int64
 
 	clip *clipLedger
 
 	// 记录本地持久化
 	logStorePath string
+	logStoreErr  error
 	saveMu       sync.Mutex
 	saveTimer    *time.Timer
 	writeMu      sync.Mutex
@@ -267,13 +264,30 @@ func (a *App) initLogStore() {
 	}
 	a.logStorePath = path
 
-	logs, err := loadLogsFromDisk(path)
+	store, err := loadLogStore(path)
 	if err != nil {
 		log.Printf("load logs failed: %v", err)
+		a.logStoreErr = err // 不自动覆盖无法读取的旧数据。
+		return
 	}
 
 	a.logsMu.Lock()
-	a.logs = logs
+	a.maxLogs = store.MaxLogs
+	a.settings.MaxLogs = store.MaxLogs
+	a.logs = store.Logs
+	a.contentNext = store.NextContentID
+	for i := range a.logs {
+		id := a.logs[i].ContentID
+		dataType, ok := store.Contents[id]
+		if ok {
+			_, err = os.Stat(contentFilePath(path, id))
+		}
+		if !ok || err != nil {
+			a.logs[i].ContentID = 0 // 旧版只有预览，不能让旧 ID 指向新内容。
+			continue
+		}
+		a.contents[id] = storedContent{dataType: dataType}
+	}
 	if len(a.logs) > a.maxLogs {
 		a.logs = a.logs[:a.maxLogs]
 	}
@@ -303,21 +317,68 @@ func (a *App) markLogsDirty() {
 
 // flushLogs 立即把当前记录写入本地文件（原子写）
 func (a *App) flushLogs() {
-	path := a.logStorePath
-	if path == "" {
-		return
-	}
-
-	a.logsMu.RLock()
-	snapshot := make([]LogEntry, len(a.logs))
-	copy(snapshot, a.logs)
-	a.logsMu.RUnlock()
-
-	a.writeMu.Lock()
-	defer a.writeMu.Unlock()
-	if err := saveLogsToDisk(path, snapshot); err != nil {
+	if err := a.saveLogStore(); err != nil {
 		log.Printf("save logs failed: %v", err)
 	}
+}
+
+func (a *App) saveLogStore() error {
+	path := a.logStorePath
+	if path == "" {
+		return nil
+	}
+	if a.logStoreErr != nil {
+		return fmt.Errorf("原记录文件无法读取，已保留原文件: %w", a.logStoreErr)
+	}
+
+	// 在取快照前串行化写入，避免较早的快照覆盖清空或缩小数量后的新状态。
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	a.logsMu.RLock()
+	a.contentsMu.RLock()
+	store := logStore{
+		Logs: append([]LogEntry{}, a.logs...), MaxLogs: a.maxLogs,
+		NextContentID: a.contentNext, Contents: make(map[int64]string),
+	}
+	pending := make(map[int64][]byte)
+	for _, entry := range store.Logs {
+		if sc, ok := a.contents[entry.ContentID]; ok {
+			store.Contents[entry.ContentID] = sc.dataType
+			if sc.content != nil {
+				pending[entry.ContentID] = sc.content
+			}
+		}
+	}
+	a.contentsMu.RUnlock()
+	a.logsMu.RUnlock()
+
+	if len(pending) > 0 {
+		if err := os.MkdirAll(filepath.Join(filepath.Dir(path), "contents"), 0o700); err != nil {
+			return err
+		}
+	}
+	for id, content := range pending {
+		if err := writeLocalFile(contentFilePath(path, id), content); err != nil {
+			return fmt.Errorf("保存剪贴板内容失败: %w", err)
+		}
+	}
+	raw, err := json.Marshal(store)
+	if err != nil {
+		return err
+	}
+	if err := writeLocalFile(path, raw); err != nil {
+		return err
+	}
+	// 已落盘内容按需读取，不让保留数量决定常驻图片内存。
+	a.contentsMu.Lock()
+	for id := range pending {
+		if sc, ok := a.contents[id]; ok {
+			sc.content = nil
+			a.contents[id] = sc
+		}
+	}
+	a.contentsMu.Unlock()
+	return nil
 }
 
 // applyMaxLogs 更新记录上限并按序裁剪（超出部分删除最早的记录）
@@ -468,9 +529,6 @@ func (a *App) storeContent(dataType string, content []byte) int64 {
 	if dataType != "text" && dataType != "image" {
 		return 0
 	}
-	if dataType == "image" && len(content) > maxStoredImageBytes {
-		return 0
-	}
 
 	a.contentsMu.Lock()
 	defer a.contentsMu.Unlock()
@@ -480,22 +538,31 @@ func (a *App) storeContent(dataType string, content []byte) int64 {
 	cp := make([]byte, len(content))
 	copy(cp, content)
 	a.contents[id] = storedContent{dataType: dataType, content: cp}
-	a.contentsOrder = append(a.contentsOrder, id)
-	for len(a.contentsOrder) > maxStoredContents {
-		delete(a.contents, a.contentsOrder[0])
-		a.contentsOrder = a.contentsOrder[1:]
-	}
 	return id
+}
+
+func (a *App) readContent(id int64) (storedContent, error) {
+	a.contentsMu.RLock()
+	defer a.contentsMu.RUnlock()
+	sc, ok := a.contents[id]
+	if !ok {
+		return storedContent{}, fmt.Errorf("内容已过期或旧版未保存原文")
+	}
+	if sc.content == nil {
+		var err error
+		sc.content, err = os.ReadFile(contentFilePath(a.logStorePath, id))
+		if err != nil {
+			return storedContent{}, fmt.Errorf("读取本地内容失败: %w", err)
+		}
+	}
+	return sc, nil
 }
 
 // GetLogContent 按 ID 读取暂存的剪贴板内容（前端渲染缩略图/复制）
 func (a *App) GetLogContent(id int64) map[string]any {
-	a.contentsMu.RLock()
-	defer a.contentsMu.RUnlock()
-
-	sc, ok := a.contents[id]
-	if !ok {
-		return map[string]any{"found": false}
+	sc, err := a.readContent(id)
+	if err != nil {
+		return map[string]any{"found": false, "error": err.Error()}
 	}
 	if sc.dataType == "text" {
 		return map[string]any{"found": true, "type": "text", "text": string(sc.content)}
@@ -510,11 +577,9 @@ func (a *App) GetLogContent(id int64) map[string]any {
 
 // CopyLogContent 把暂存的剪贴板内容写回系统剪贴板（一键复制）
 func (a *App) CopyLogContent(id int64) error {
-	a.contentsMu.RLock()
-	sc, ok := a.contents[id]
-	a.contentsMu.RUnlock()
-	if !ok {
-		return fmt.Errorf("内容已过期，不在暂存队列中")
+	sc, err := a.readContent(id)
+	if err != nil {
+		return err
 	}
 
 	mime := "text/plain"
@@ -569,7 +634,9 @@ func (a *App) onLogFull(e ws.LogEvent) {
 	}
 
 	// 发送事件到前端
-	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
+	}
 
 	// 本地落盘（合并窗口内只写一次）
 	a.markLogsDirty()
