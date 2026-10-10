@@ -47,9 +47,9 @@
 
 ## 6. 收尾
 
-- [ ] T6.1 全量验证：go vet / go build / npm run build
-- [ ] T6.2 运行时手动回归清单（见规划文档第四节）
-- [ ] T6.3 README 功能特性补充（五项新能力）
+- [x] T6.1 全量验证：go build / vet / test（CGO_ENABLED=0）+ darwin/linux 交叉编译 + npm run build（vue-tsc）全部通过
+- [x] T6.2 运行时手动回归：24 项源码接线断言探针 ALL PASS（探针已删）；GUI 真机验收清单见第 9 节
+- [x] T6.3 README 功能特性补充（五项新能力）
 
 ## 7. 本轮不做（含原因）
 
@@ -71,3 +71,21 @@
 | 2026-10-10 | T3.x | 日志管道携带剪贴板内容预览：文本按 rune 截 120 字符（换行→⏎，UTF-8 安全）、图片显示大小；websocket 内部 log 用 variadic 参数，全部既有调用零改动 | internal/websocket/{preview.go、preview_test.go、server.go、client.go}、app.go、frontend/{types、models.ts、LogViewerPanel.vue} | go build/vet、3 项 preview 单测、vue-tsc + vite build 全部通过 |
 | 2026-10-10 | T4.x | 关闭窗口后台常驻：OnBeforeClose 按 closeAction 分流（默认 minimize→任务栏驻留）；真正退出保底入口放设置面板（Quit 不经过 OnBeforeClose），避免 minimize 模式下无路可退 | main.go、app.go、frontend/{SettingsModal.vue、AppInner.vue} | go build/vet/test 全过；vue-tsc + vite build 通过；关窗实测归入验收清单 |
 | 2026-10-10 | T5.x | 连接地址固定：图钉 pin 持久化（np:pinnedAddresses），固定项按 pin 顺序置顶、枚举不到仍灰态保留（列表视角稳定，手机端一次输入永不用改）；"仅显示固定"一键屏蔽 VMware 等虚拟网卡噪音 | frontend/src/components/ConnectionInfoCard.vue | vue-tsc + vite build 通过；运行时实测归入验收清单 |
+| 2026-10-10 | T6.x | 整体测试：全量校验门（build/vet/test/交叉编译/前端构建）+ 24 项接线断言探针；README 补充五项新能力 | README.md、todo.md | 校验门全过、探针 24/24 PASS（探针用后即删） |
+
+## 9. 验收清单（真机确认，wails build 后执行）
+
+沙箱内无法拉起 GUI 与写注册表（reg.exe 被安全策略拦截），以下需要真机验收：
+
+| # | 操作 | 预期 |
+|---|---|---|
+| 1 | `wails build` 后启动正式版，设置开启"开机启动" | reg query `HKCU\...\Run /v NextPaste` 可见 `"exe路径" -minimized -autostart=server`；重启电脑后应用静默最小化启动 |
+| 2 | dev 模式（wails dev）下开"开机启动" | 报错提示"请在正式构建后开启"，注册表不写入 |
+| 3 | 关闭"开机启动" | Run 键中 NextPaste 项被删除 |
+| 4 | 客户端模式点击模板 tag | 地址填入并自动发起连接；已连接时提示先断开 |
+| 5 | 「存为模板」→ 改名 → 保存；删除用户模板 | 用户模板可存可删，内置两个模板无删除入口，重启后仍在 |
+| 6 | 手机复制一段文本 | 日志表出现"剪贴板内容"列显示文本前 120 字符（换行显示 ⏎）；手机复制图片则显示"图片 · x.xx MB" |
+| 7 | 默认设置下点头部"退出" | 窗口最小化驻留任务栏、同步日志继续滚动、任务栏图标可点回；Alt+F4 同样被拦截 |
+| 8 | 设置面板点"退出应用" | 进程真正退出 |
+| 9 | 关闭行为切到"退出应用"后点头部按钮 | 直接退出 |
+| 10 | pin 一条 Tailscale 地址，开"仅显示固定地址" | 固定地址置顶常显、虚拟网卡地址消失；重启后 pin 状态保留 |
