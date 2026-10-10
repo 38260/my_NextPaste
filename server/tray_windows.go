@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/getlantern/systray"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows"
 )
 
@@ -19,7 +20,7 @@ var trayIcon []byte
 func (a *App) startTray() <-chan struct{} {
 	ready := make(chan struct{})
 	done := make(chan struct{})
-	clicks := make(chan struct{}, 1)
+	clicks := make(chan uintptr, 1)
 	go runTray(func() {
 		systray.SetIcon(trayIcon)
 		systray.SetTooltip("传笺 · 后台同步")
@@ -32,8 +33,11 @@ func (a *App) startTray() <-chan struct{} {
 		go func() {
 			for {
 				select {
-				case <-clicks:
+				case click := <-clicks:
 					a.ShowWindow()
+					if click == 0x0205 {
+						wailsruntime.EventsEmit(a.ctx, "settings:open")
+					}
 				case <-show.ClickedCh:
 					a.ShowWindow()
 				case <-quit.ClickedCh:
@@ -50,8 +54,8 @@ func (a *App) startTray() <-chan struct{} {
 	return ready
 }
 
-// runTray 保留库的菜单处理，仅将左键消息转交给窗口恢复逻辑。
-func runTray(onReady, onExit func(), clicks chan<- struct{}) {
+// runTray 将左右键转交给应用，其他消息继续由托盘库处理。
+func runTray(onReady, onExit func(), clicks chan<- uintptr) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	defer onExit()
@@ -79,10 +83,10 @@ func runTray(onReady, onExit func(), clicks chan<- struct{}) {
 			}
 			return
 		}
-		// systray v1.2.2 使用 WM_USER+1 通知；右键及其他消息继续交给库。
-		if msg.message == 0x0401 && msg.lParam == 0x0202 {
+		// systray v1.2.2 使用 WM_USER+1 通知，区分左键恢复和右键设置。
+		if msg.message == 0x0401 && (msg.lParam == 0x0202 || msg.lParam == 0x0205) {
 			select {
-			case clicks <- struct{}{}:
+			case clicks <- msg.lParam:
 			default:
 			}
 			continue

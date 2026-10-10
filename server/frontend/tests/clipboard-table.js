@@ -129,6 +129,11 @@ async (page) => {
   await table.getByRole('button', {name:'清空',exact:true}).click()
   await page.getByText('清空记录失败：Error: 测试保存失败',{exact:true}).waitFor()
   assert(await page.locator('.clip-cell').count() === 1, '清空失败时删除了现有内容')
+  await page.evaluate(() => window.clipTest.callbacks['settings:open']())
+  await page.getByText('系统设置', {exact:true}).waitFor()
+  await page.evaluate(() => window.clipTest.callbacks['settings:open']())
+  assert(await page.getByText('系统设置', {exact:true}).count() === 1, '重复托盘右键产生多个设置面板')
+  assert(await page.getByRole('button', {name:'退出应用',exact:true}).isVisible(), '设置中缺失退出入口')
   assert(errors.length === 0, `运行时错误：${errors.join(';')}`)
-  console.log('PASS: 单表布局、遮罩/全文、复制、缓存、图片预览、尺寸持久化、6 组布局、旧预览隐藏、清空与延迟读取、失败保护')
+  console.log('PASS: 剪贴板表格交互、6 组布局、托盘打开设置与退出入口')
 }

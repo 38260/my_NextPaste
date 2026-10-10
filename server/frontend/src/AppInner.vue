@@ -280,6 +280,7 @@ onMounted(() => {
   loadLogs()
 
   EventsOn('logs:updated', onLogsUpdated)
+  EventsOn('settings:open', () => { settingsOpen.value = true })
 
   const statusInterval = window.setInterval(() => {
     void refreshStatus()
@@ -288,6 +289,7 @@ onMounted(() => {
   onUnmounted(() => {
     window.clearInterval(statusInterval)
     EventsOff('logs:updated')
+    EventsOff('settings:open')
   })
 })
 

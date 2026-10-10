@@ -29,7 +29,8 @@ func TestTrayEvents(t *testing.T) {
 	}
 
 	ready, done := make(chan struct{}), make(chan struct{})
-	clicks, shows, quits := make(chan struct{}, 1), make(chan struct{}, 1), make(chan struct{}, 1)
+	clicks := make(chan uintptr, 1)
+	shows, quits := make(chan struct{}, 1), make(chan struct{}, 1)
 	go runTray(func() {
 		systray.SetIcon(trayIcon)
 		show := systray.AddMenuItem("显示窗口", "")
@@ -59,6 +60,17 @@ func TestTrayEvents(t *testing.T) {
 		}
 	}
 	wait(ready, "tray ready")
+	waitClick := func(expected uintptr) {
+		t.Helper()
+		select {
+		case actual := <-clicks:
+			if actual != expected {
+				t.Fatalf("tray click = %#x, want %#x", actual, expected)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout waiting for tray click %#x", expected)
+		}
+	}
 
 	user32 := windows.NewLazySystemDLL("user32.dll")
 	var tray, thread uintptr
@@ -88,29 +100,25 @@ func TestTrayEvents(t *testing.T) {
 		runtime.GC()
 		runtime.Gosched()
 		post(0x0401, 100, 0x0202)
-		wait(clicks, "left click")
+		waitClick(0x0202)
 	}
 
 	for i := 0; i < 3; i++ {
 		post(0x0401, 100, 0x0205)
+		waitClick(0x0205)
 		menuVisible := false
-		deadline := time.Now().Add(3 * time.Second)
-		for !menuVisible && time.Now().Before(deadline) {
-			user32.NewProc("EnumThreadWindows").Call(thread, windows.NewCallback(func(hwnd, _ uintptr) uintptr {
-				var name [64]uint16
-				user32.NewProc("GetClassNameW").Call(hwnd, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
-				visible, _, _ := user32.NewProc("IsWindowVisible").Call(hwnd)
-				if windows.UTF16ToString(name[:]) == "#32768" && visible != 0 {
-					menuVisible = true
-				}
-				return 1
-			}), 0)
-			time.Sleep(10 * time.Millisecond)
+		user32.NewProc("EnumThreadWindows").Call(thread, windows.NewCallback(func(hwnd, _ uintptr) uintptr {
+			var name [64]uint16
+			user32.NewProc("GetClassNameW").Call(hwnd, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
+			visible, _, _ := user32.NewProc("IsWindowVisible").Call(hwnd)
+			if windows.UTF16ToString(name[:]) == "#32768" && visible != 0 {
+				menuVisible = true
+			}
+			return 1
+		}), 0)
+		if menuVisible {
+			t.Fatal("right click opened the old menu instead of settings")
 		}
-		if !menuVisible {
-			t.Fatal("right click did not open the native menu")
-		}
-		post(0x001F, 0, 0) // WM_CANCELMODE 关闭菜单，不触碰其他窗口。
 		post(0x0111, 1, 0) // WM_COMMAND：库分配的第一个菜单项为显示窗口。
 		wait(shows, "show menu action")
 		select {
