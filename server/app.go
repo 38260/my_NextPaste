@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"server/internal/clipboard"
@@ -57,6 +58,8 @@ type App struct {
 	clip *clipLedger
 
 	launchFlags LaunchFlags
+	trayReady   atomic.Bool
+	quitting    atomic.Bool
 }
 
 // NewApp creates a new App application struct
@@ -91,15 +94,21 @@ func (a *App) SetLaunchFlags(flags LaunchFlags) {
 // ShowWindow 显示主窗口
 func (a *App) ShowWindow() {
 	runtime.WindowShow(a.ctx)
+	runtime.WindowUnminimise(a.ctx)
 }
 
-// HideWindow 隐藏主窗口
+// HideWindow 将主窗口隐藏到托盘；托盘尚未就绪时保留任务栏入口
 func (a *App) HideWindow() {
-	runtime.WindowHide(a.ctx)
+	if a.trayReady.Load() {
+		runtime.WindowHide(a.ctx)
+		return
+	}
+	runtime.WindowMinimise(a.ctx)
 }
 
 // Quit 完全退出应用
 func (a *App) Quit() {
+	a.quitting.Store(true)
 	runtime.Quit(a.ctx)
 }
 
@@ -162,25 +171,31 @@ func (a *App) GetAutostartStatus() map[string]any {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	trayReady := a.startTray()
 
 	// Settings live in localStorage on the frontend; backend stores the last applied copy.
 	// Auto start/connect is triggered from the frontend (so it can reuse persisted
 	// address/port/url and show UI errors).
 	if a.launchFlags.Minimized {
-		runtime.WindowHide(a.ctx)
+		select {
+		case <-trayReady:
+		case <-time.After(5 * time.Second):
+		}
+		a.HideWindow()
 	}
 }
 
-// beforeClose 拦截窗口关闭：关闭行为为 minimize（默认）时，
-// 关窗/Alt+F4 只最小化到任务栏驻留，进程与同步继续运行；
-// runtime.Quit() 不经过此钩子，是设置面板"退出应用"的保底退出路径
+// beforeClose 拦截关窗和退出请求；显式退出由 quitting 标志放行
 func (a *App) beforeClose(ctx context.Context) bool {
+	if a.quitting.Load() {
+		return false
+	}
 	a.settingsMu.RLock()
 	action := a.settings.CloseAction
 	a.settingsMu.RUnlock()
 
 	if action != "close" {
-		runtime.WindowMinimise(a.ctx)
+		a.HideWindow()
 		return true
 	}
 	return false
@@ -188,6 +203,7 @@ func (a *App) beforeClose(ctx context.Context) bool {
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
+	a.stopTray()
 	a.StopServer()
 	a.DisconnectClient()
 }
