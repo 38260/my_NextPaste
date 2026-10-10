@@ -77,6 +77,8 @@
 - [x] T9.3 应用图标：`server/build/appicon.png`（1024，四周留 6% 呼吸位）+ `server/build/windows/icon.ico`（16/24/32/48/64/128/256 七档）；`.gitignore` 增加例外把图标源文件纳入版本管理（`server/build/bin/` 仍忽略）
 - [x] T9.4 README：居中头图 + 传笺命名与 Slogan + fork 归属说明；项目结构树补 `docs/assets/`；修正 Go 版本号（1.23→1.24）与失效的许可证链接
 - [x] T9.5 验证：透明底在浅底/深底以及 16–256px 小尺寸下渲染自查通过（无棋盘底、无白圈、小尺寸可辨识）
+- [x] T9.6 重建 exe 使图标生效：运行中的实例（用户从桌面启动）锁住 `build/bin/NextPaste Server.exe`，首次构建在"复制产物"一步失败；不杀进程，改为把运行中的 exe 与旧备份挪到 `.brand-tmp/stale/`（Windows 允许重命名/移动运行中的 exe），重建成功（12.5MB）
+- [x] T9.7 图标校验：新 exe 内嵌 7 档图标与 `build/windows/icon.ico` 的 PNG 数据逐字节一致（7/7 命中），旧 exe 0/7；提取 exe 图标目视确认已换为传笺 logo
 
 ## 7. 本轮不做（含原因）
 
