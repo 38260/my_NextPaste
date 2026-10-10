@@ -16,6 +16,7 @@ import (
 type LogEntry struct {
 	Level     string `json:"level"`
 	Message   string `json:"message"`
+	Preview   string `json:"preview"` // 剪贴板内容预览（非剪贴板日志为空）
 	Timestamp int64  `json:"timestamp"`
 }
 
@@ -162,7 +163,7 @@ func (a *App) StartServer(address string, port int) error {
 	a.wsServer.SetClipboardCallback(a.onClipboardReceivedBinary)
 
 	// 启动 WebSocket 服务器
-	err := a.wsServer.Start(address, port, a.onLog)
+	err := a.wsServer.Start(address, port, a.onLogFull)
 	if err != nil {
 		return err
 	}
@@ -208,7 +209,7 @@ func (a *App) ConnectClient(url string) error {
 	})
 
 	// 连接到服务器（异步，会自动重连）
-	err := a.wsClient.Connect(url, a.onLog)
+	err := a.wsClient.Connect(url, a.onLogFull)
 	if err != nil {
 		return err
 	}
@@ -266,14 +267,15 @@ func (a *App) ClearLogs() {
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
 }
 
-// onLog 日志回调
-func (a *App) onLog(level, message string) {
+// onLogFull 日志回调（含剪贴板内容预览），作为 websocket 包 LogCallback 使用
+func (a *App) onLogFull(level, message, preview string) {
 	a.logsMu.Lock()
 	defer a.logsMu.Unlock()
 
 	entry := LogEntry{
 		Level:     level,
 		Message:   message,
+		Preview:   preview,
 		Timestamp: 0,
 	}
 
@@ -284,6 +286,11 @@ func (a *App) onLog(level, message string) {
 
 	// 发送事件到前端
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
+}
+
+// onLog 日志回调（无预览）
+func (a *App) onLog(level, message string) {
+	a.onLogFull(level, message, "")
 }
 
 // onClipboardChange 剪贴板变化回调（服务器模式，V1.1 二进制协议）

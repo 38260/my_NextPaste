@@ -39,8 +39,8 @@ type Client struct {
 	PendingMeta   *protocol.TransferMeta
 }
 
-// LogCallback 日志回调函数
-type LogCallback func(level, message string)
+// LogCallback 日志回调函数（preview 为剪贴板内容预览，非剪贴板日志传空）
+type LogCallback func(level, message, preview string)
 
 // BinaryClipboardCallback 剪贴板数据回调函数（V1.1 二进制协议）
 // dataType: "text" 或 "image"
@@ -285,7 +285,7 @@ func (s *Server) handleBinaryText(client *Client, msg *protocol.BinaryMessage) {
 	deviceName := client.DeviceName
 	client.mu.RUnlock()
 
-	s.log("INFO", fmt.Sprintf("收到文本数据 [%d 字符] 来自 %s", len(text), deviceName))
+	s.log("INFO", fmt.Sprintf("收到文本数据 [%d 字符] 来自 %s", len(text), deviceName), buildPreview("text", []byte(text)))
 
 	// 调用回调函数（通知 App 层写入本地剪贴板）
 	if s.clipboardCallback != nil {
@@ -371,7 +371,7 @@ func (s *Server) handleBinaryImage(client *Client, msg *protocol.BinaryMessage) 
 
 	if finished {
 		sizeMB := float64(len(fullData)) / 1024 / 1024
-		s.log("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB] 来自 %s", sizeMB, deviceName))
+		s.log("INFO", fmt.Sprintf("收到完整图片数据 [%.2f MB] 来自 %s", sizeMB, deviceName), buildPreview("image", fullData))
 
 		// 调用回调函数
 		if s.clipboardCallback != nil {
@@ -427,7 +427,7 @@ func (s *Server) broadcastContent(dataType string, content []byte, mime string, 
 
 // BroadcastClipboardBinary 广播剪贴板数据（V1.1 二进制协议）
 func (s *Server) BroadcastClipboardBinary(dataType string, content []byte) error {
-	s.log("INFO", fmt.Sprintf("广播剪贴板数据: %s", dataType))
+	s.log("INFO", fmt.Sprintf("广播剪贴板数据: %s", dataType), buildPreview(dataType, content))
 	return s.broadcastContent(dataType, content, "", "")
 }
 
@@ -535,10 +535,14 @@ func (s *Server) GetLocalIPs() ([]string, error) {
 	return ips, nil
 }
 
-// log 记录日志
-func (s *Server) log(level, message string) {
+// log 记录日志（preview 为可选的剪贴板内容预览）
+func (s *Server) log(level, message string, preview ...string) {
+	p := ""
+	if len(preview) > 0 {
+		p = preview[0]
+	}
 	if s.logCb != nil {
-		s.logCb(level, message)
+		s.logCb(level, message, p)
 	} else {
 		log.Printf("[%s] %s", level, message)
 	}

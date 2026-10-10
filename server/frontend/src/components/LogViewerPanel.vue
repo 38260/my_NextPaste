@@ -4,6 +4,7 @@ import {
   NButton,
   NCard,
   NDataTable,
+  NEllipsis,
   NSelect,
   NSpace,
   NTag,
@@ -72,7 +73,33 @@ const columns: DataTableColumns<LogEntry> = [
   {
     title: '内容',
     key: 'message',
-    ellipsis: { tooltip: true }
+    width: 280,
+    render: (row) => {
+      return h(NEllipsis, { tooltip: true }, { default: () => row.message })
+    }
+  },
+  {
+    title: '剪贴板内容',
+    key: 'preview',
+    width: 260,
+    render: (row) => {
+      if (!row.preview) {
+        return h(
+          'span',
+          { style: 'opacity: 0.35; user-select: none' },
+          '—'
+        )
+      }
+      return h(
+        NEllipsis,
+        {
+          tooltip: true,
+          style:
+            'font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace; font-size: 12px'
+        },
+        { default: () => row.preview }
+      )
+    }
   },
   {
     title: '时间',
