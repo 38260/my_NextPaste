@@ -66,9 +66,9 @@
 
 ## 12. 需求六：桌面端响应式布局（commit: feat: 桌面端响应式布局）
 
-- [ ] T6.1 前端 `AppInner.vue`：监听窗口宽度，侧栏宽度按断点自适应（420→360→300）
-- [ ] T6.2 `LogViewerPanel.vue`：compact 模式列宽自适应，窄窗保证可读性
-- [ ] T6.3 验证：vue-tsc + vite build
+- [x] T6.1 前端 `AppInner.vue`：监听窗口宽度，侧栏宽度按断点自适应（≥1200=420 / 1000-1200=380 / <1000=320）
+- [x] T6.2 `LogViewerPanel.vue`：compact 模式（<1100 触发）列宽自适应，内容列放开为弹性宽度
+- [x] T6.3 验证：vue-tsc + vite build 通过
 
 ## 7. 本轮不做（含原因）
 
@@ -93,6 +93,7 @@
 | 2026-10-10 | T6.x | 整体测试：全量校验门（build/vet/test/交叉编译/前端构建）+ 24 项接线断言探针；README 补充五项新能力 | README.md、todo.md | 校验门全过、探针 24/24 PASS（探针用后即删） |
 | 2026-10-10 | T7.x | 日志分类：LogCallback 重构为 LogEvent 结构体（顺带打通 DataType/Content 携带，为需求八铺路）；分类判定放在事件源头（ws 默认 connection / logClip=clipboard / app 内部=system），不猜消息文本 | internal/websocket/{server.go、client.go、preview.go、preview_test.go}、app.go、frontend/{types、models.ts、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过 |
 | 2026-10-10 | T8.x | 剪贴板内容暂存（20 条环，防内存膨胀）；图片日志懒加载缩略图（contentId 缓存）；一键复制走后端 SetClipboard 写回系统剪贴板（复制后等同本地复制，会正常同步到对端） | app.go、frontend/{wailsjs/*、types、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过；运行时实测归入验收清单 |
+| 2026-10-10 | T6(响应式) | 响应式布局：窗口宽度驱动侧栏（420/380/320 三档断点）与日志列宽（compact<1100 内容列弹性化），最小窗口 900px 下仍可读 | frontend/{AppInner.vue、LogViewerPanel.vue} | vue-tsc + vite build 通过；拖动窗口实测归入验收清单 |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 

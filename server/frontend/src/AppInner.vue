@@ -267,6 +267,28 @@ const colorScheme = computed<ColorScheme>({
 
 const settingsOpen = ref(false)
 
+// 响应式布局：窗口宽度驱动侧栏与日志列宽
+const windowWidth = ref(window.innerWidth)
+const onWindowResize = () => {
+  windowWidth.value = window.innerWidth
+}
+
+const siderWidth = computed(() => {
+  if (windowWidth.value < 1000) return 320
+  if (windowWidth.value < 1200) return 380
+  return 420
+})
+
+const compactMode = computed(() => windowWidth.value < 1100)
+
+onMounted(() => {
+  window.addEventListener('resize', onWindowResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onWindowResize)
+})
+
 type AutoStartMode = 'server' | 'client'
 
 type Settings = {
@@ -448,7 +470,7 @@ watch(
     </n-layout-header>
 
     <n-layout has-sider style="height: calc(100vh - 56px)">
-      <n-layout-sider bordered :width="420" content-style="padding: 16px">
+      <n-layout-sider bordered :width="siderWidth" content-style="padding: 16px">
         <n-space vertical :size="16">
           <n-card size="small" title="工作模式">
             <n-tabs
@@ -492,7 +514,7 @@ watch(
       </n-layout-sider>
 
       <n-layout-content content-style="padding: 16px">
-        <LogViewerPanel :logs="logs" @clear="handleClearLogs" />
+        <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
       </n-layout-content>
     </n-layout>
 

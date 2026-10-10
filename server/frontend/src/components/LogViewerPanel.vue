@@ -19,13 +19,16 @@ import type { LogEntry } from '../types'
 
 interface Props {
   logs: LogEntry[]
+  compact?: boolean
 }
 
 interface Emits {
   (e: 'clear'): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  compact: false
+})
 const emit = defineEmits<Emits>()
 
 const message = useMessage()
@@ -122,11 +125,11 @@ const categoryTagType = (category?: string) => {
   }
 }
 
-const columns: DataTableColumns<LogEntry> = [
+const columns = computed<DataTableColumns<LogEntry>>(() => [
   {
     title: '级别',
     key: 'level',
-    width: 100,
+    width: props.compact ? 88 : 100,
     render: (row) => {
       return h(
         NTag,
@@ -138,7 +141,7 @@ const columns: DataTableColumns<LogEntry> = [
   {
     title: '分类',
     key: 'category',
-    width: 84,
+    width: props.compact ? 76 : 84,
     render: (row) => {
       return h(
         NTag,
@@ -150,7 +153,7 @@ const columns: DataTableColumns<LogEntry> = [
   {
     title: '内容',
     key: 'message',
-    width: 280,
+    ...(props.compact ? {} : { width: 280 }),
     render: (row) => {
       return h(NEllipsis, { tooltip: true }, { default: () => row.message })
     }
@@ -158,7 +161,7 @@ const columns: DataTableColumns<LogEntry> = [
   {
     title: '剪贴板内容',
     key: 'preview',
-    width: 260,
+    width: props.compact ? 200 : 260,
     render: (row) => {
       const parts: any[] = []
 
@@ -214,10 +217,10 @@ const columns: DataTableColumns<LogEntry> = [
   {
     title: '时间',
     key: 'timestamp',
-    width: 120,
+    width: props.compact ? 96 : 120,
     render: (row) => formatTime(row.timestamp)
   }
-]
+])
 
 // avoid unused import for h by defining here
 import { h } from 'vue'
