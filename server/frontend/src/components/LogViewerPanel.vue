@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
   NDataTable,
   NEllipsis,
+  NInputNumber,
+  NPopover,
   NSelect,
   NSpace,
+  NSlider,
+  NSwitch,
   NTag,
   NText
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import type { LogEntry } from '../types'
+import ClipboardContentCell from './ClipboardContentCell.vue'
+import { DEFAULT_SIZES, SIZE_LIMITS, clampSize, loadSizes, saveSizes, type ClipSizes } from '../utils/clipLayout'
 
 interface Props {
   logs: LogEntry[]
@@ -27,7 +33,36 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
-// 日志只显示收发事件，正文与图片统一在右侧内容面板展示。
+const sizes = ref<ClipSizes>(loadSizes())
+watch(sizes, (value) => saveSizes(value), { deep: true })
+const sizeRows = (Object.keys(DEFAULT_SIZES) as (keyof ClipSizes)[]).map((key) => ({
+  key,
+  label: { textW: '文本框宽', textH: '文本框高', imgW: '图片宽', imgH: '图片高' }[key],
+  min: SIZE_LIMITS[key][0],
+  max: SIZE_LIMITS[key][1]
+}))
+const setSize = (key: keyof ClipSizes, value: number | null) => {
+  sizes.value = { ...sizes.value, [key]: clampSize(key, Number(value)) }
+}
+const resetSizes = () => { sizes.value = { ...DEFAULT_SIZES } }
+
+const MASK_KEY = 'np:clipReveal'
+const revealAll = ref(localStorage.getItem(MASK_KEY) === '1')
+const overrides = ref<Record<number, boolean>>({})
+const isShown = (id: number) => overrides.value[id] ?? revealAll.value
+const toggleAll = (value: boolean) => {
+  revealAll.value = value
+  overrides.value = {}
+  localStorage.setItem(MASK_KEY, value ? '1' : '0')
+}
+const toggleOne = (id: number) => { overrides.value[id] = !isShown(id) }
+watch(() => props.logs, (logs) => {
+  const retained = new Set(logs.map((row) => row.contentId))
+  for (const id of Object.keys(overrides.value)) {
+    if (!retained.has(Number(id))) delete overrides.value[Number(id)]
+  }
+})
+
 type Level = 'ALL' | 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
 type Category = 'ALL' | 'clipboard' | 'connection' | 'system'
 
@@ -114,9 +149,18 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
     }
   },
   {
-    title: '事件',
-    key: 'message',
+    title: '剪贴板内容',
+    key: 'content',
     render: (row) => {
+      if (row.category === 'clipboard' && row.contentId) {
+        return h(ClipboardContentCell, {
+          key: row.contentId,
+          row,
+          sizes: sizes.value,
+          shown: isShown(row.contentId),
+          onToggle: () => toggleOne(row.contentId!)
+        })
+      }
       return h(NEllipsis, {
         tooltip: {
           contentStyle: {
@@ -127,7 +171,7 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
             overflowWrap: 'anywhere'
           }
         }
-      }, { default: () => row.message })
+      }, { default: () => row.preview || row.message })
     }
   },
   {
@@ -142,7 +186,7 @@ const handleClear = () => emit('clear')
 </script>
 
 <template>
-  <n-card size="small" title="应用日志">
+  <n-card size="small" title="应用日志" class="log-panel">
     <template #header-extra>
       <n-space align="center" :size="8">
         <n-text depth="3">{{ filteredLogs.length }} 条</n-text>
@@ -173,6 +217,22 @@ const handleClear = () => emit('clear')
       </n-space>
     </template>
 
+    <div class="content-controls">
+      <n-text depth="3">显示内容</n-text>
+      <n-switch size="small" :value="revealAll" aria-label="显示全部剪贴板内容" @update:value="toggleAll" />
+      <n-popover trigger="click" placement="bottom-start" :show-arrow="false" style="width: 292px">
+        <template #trigger><n-button size="tiny" quaternary title="自定义条目尺寸">尺寸</n-button></template>
+        <div class="size-form">
+          <div v-for="row in sizeRows" :key="row.key" class="size-row">
+            <n-text depth="3" class="size-label">{{ row.label }}</n-text>
+            <n-slider :value="sizes[row.key]" :min="row.min" :max="row.max" :step="2" @update:value="(value: number) => setSize(row.key, value)" />
+            <n-input-number size="tiny" :value="sizes[row.key]" :min="row.min" :max="row.max" :show-button="false" @update:value="(value: number | null) => setSize(row.key, value)" />
+          </div>
+          <n-button size="tiny" block secondary @click="resetSizes">恢复默认尺寸</n-button>
+        </div>
+      </n-popover>
+    </div>
+
     <n-data-table
       size="small"
       :columns="columns"
@@ -183,3 +243,13 @@ const handleClear = () => emit('clear')
     />
   </n-card>
 </template>
+
+<style scoped>
+.content-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.size-form { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }
+.size-row { display: flex; align-items: center; gap: 10px; }
+.size-label { flex: 0 0 56px; font-size: 12px; }
+.size-row :deep(.n-slider) { flex: 1; min-width: 0; }
+.size-row :deep(.n-input-number) { flex: 0 0 62px; }
+.log-panel :deep(.n-card-header) { flex-wrap: wrap; gap: 8px; }
+</style>
