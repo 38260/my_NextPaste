@@ -80,6 +80,22 @@
 - [x] T9.6 重建 exe 使图标生效：运行中的实例（用户从桌面启动）锁住 `build/bin/NextPaste Server.exe`，首次构建在"复制产物"一步失败；不杀进程，改为把运行中的 exe 与旧备份挪到 `.brand-tmp/stale/`（Windows 允许重命名/移动运行中的 exe），重建成功（12.5MB）
 - [x] T9.7 图标校验：新 exe 内嵌 7 档图标与 `build/windows/icon.ico` 的 PNG 数据逐字节一致（7/7 命中），旧 exe 0/7；提取 exe 图标目视确认已换为传笺 logo
 
+## 14. 本轮（2026-10-10 下午）需求与拆解
+
+> 用户三项诉求 + 追加一项：① 剪切板内容独立第三列、内容默认隐藏、文本框与图片可自定义宽高；② 修复"每一条内容都出现两边"；③ 工作模式内容移到顶部、主体仍是应用日志；④ 图片点击放大预览。
+> 每项小功能完成即提交，本文档同步更新。
+
+- [x] T10.1 修复重复：`clip_ledger.go` 内容签名台账（type+md5），窗口 3s
+  - 一层一条的多记（收到 / 已接收并写入 / 检测到 / 广播）→ `onLogFull` 处按签名去重，只留最先到达那条
+  - 远程内容写回系统剪贴板触发本地监听回声 → `markWritten` + `isSelfEcho` 在 `onClipboardChange(Client)` 入口吞掉（不记日志也不二次广播，断掉两端来回）
+  - 顺带修 `LogEntry.Timestamp` 恒为 0（原来所有行显示的都是"当前时刻"，第三列需要每条真实时间）
+  - 验证：go build/vet/test 通过，5 项台账单测 PASS
+- [ ] T10.2 工作模式区移至顶部条（可折叠），主体回归应用日志 — commit: feat: 工作模式区移至顶部
+- [ ] T10.3 第三列「剪切板内容」面板：条目默认隐藏内容（文本打码、图片遮罩），单条眼睛按钮揭示 + 全局显示开关；日志表移除「剪贴板内容」列 — commit: feat: 剪切板内容独立第三列（默认隐藏）
+- [ ] T10.4 条目尺寸自定义：文本框宽/高、图片宽/高四项可调（滑块 + 数字输入），第三列宽度可拖，配置持久化 `np:clipLayout`，一键恢复默认 — commit: feat: 剪切板条目尺寸可调
+- [ ] T10.5 图片点击放大预览：modal 大图 + 缩放（适配窗口 / 1:1 / 滚轮）+ Esc 关闭 + 原始尺寸与体积标注 — commit: feat: 剪切板图片点击放大预览
+- [ ] T10.6 整体测试：全量校验门 + wails build 产物 + 真机验收清单更新
+
 ## 7. 本轮不做（含原因）
 
 | 项 | 原因 | 前提何时失效 |
@@ -105,6 +121,7 @@
 | 2026-10-10 | T8.x | 剪贴板内容暂存（20 条环，防内存膨胀）；图片日志懒加载缩略图（contentId 缓存）；一键复制走后端 SetClipboard 写回系统剪贴板（复制后等同本地复制，会正常同步到对端） | app.go、frontend/{wailsjs/*、types、LogViewerPanel.vue} | go build/vet/test、vue-tsc + vite build 全部通过；运行时实测归入验收清单 |
 | 2026-10-10 | T6(响应式) | 响应式布局：窗口宽度驱动侧栏（420/380/320 三档断点）与日志列宽（compact<1100 内容列弹性化），最小窗口 900px 下仍可读 | frontend/{AppInner.vue、LogViewerPanel.vue} | vue-tsc + vite build 通过；拖动窗口实测归入验收清单 |
 | 2026-10-10 | T9.x | 品牌整理：传笺 logo 去棋盘底入库（docs/assets/），README 换头图并统一命名为传笺 ChuanJian；桌面端应用图标（appicon.png / windows/icon.ico）替换为传笺 logo；.gitignore 放行图标源文件 | docs/assets/*.png、README.md、server/build/appicon.png、server/build/windows/icon.ico、.gitignore | 透明底与多尺寸渲染自查通过；wails build 重建 exe，图标生效 |
+| 2026-10-10 | T10.1 | 「每条内容出现两边」根因定位并修复：一条内容在单链路被多层各记一行（server `handleBinaryText` 记"收到…" + App `onClipboardReceivedBinary` 记"已接收并写入…"；本地则是"检测到…" + `BroadcastClipboardBinary` 记"广播…"），且远程内容写回系统剪贴板必然触发本地监听，monitor 的按类型 hash 守卫挡不住跨类型触发，于是同一内容在两端来回各冒一次。改为 App 层内容签名台账（`clip_ledger.go`，3s 窗口 / 64 容量）：`onLogFull` 去重只留首条，`onClipboardChange(Client)` 入口吞掉自写回声（不记不播）。顺带修 `Timestamp` 恒为 0 导致所有行显示当前时刻 | server/clip_ledger.go、clip_ledger_test.go、app.go | go build/vet 通过；go test 5 项台账单测全 PASS（去重/窗口过期重记/类型隔离/回声识别与超时/容量淘汰） |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"server/internal/clipboard"
 	ws "server/internal/websocket"
@@ -53,6 +54,8 @@ type App struct {
 	contentsMu    sync.RWMutex
 	contentNext   int64
 
+	clip *clipLedger
+
 	launchFlags LaunchFlags
 }
 
@@ -65,6 +68,7 @@ func NewApp() *App {
 		logs:         make([]LogEntry, 0),
 		maxLogs:      500,
 		contents:     make(map[int64]storedContent),
+		clip:         newClipLedger(),
 		mode:         "server", // 默认为服务器模式
 		settings: Settings{
 			AutoStartEnabled:       false,
@@ -380,6 +384,14 @@ func (a *App) onLogFull(e ws.LogEvent) {
 		category = "system"
 	}
 
+	// 同一条内容在一次同步链路里会被多层各记一行（收到 / 已写入 / 广播），
+	// 按内容签名去重后只保留最先到达的那一行
+	if category == "clipboard" && e.DataType != "" && e.Content != nil {
+		if !a.clip.noteLogged(clipSig(e.DataType, e.Content)) {
+			return
+		}
+	}
+
 	var contentID int64
 	if e.DataType != "" && e.Content != nil {
 		contentID = a.storeContent(e.DataType, e.Content)
@@ -391,7 +403,7 @@ func (a *App) onLogFull(e ws.LogEvent) {
 		Preview:   e.Preview,
 		Category:  category,
 		ContentID: contentID,
-		Timestamp: 0,
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	a.logs = append([]LogEntry{entry}, a.logs...)
@@ -422,6 +434,12 @@ func (a *App) onLogClip(level, message, dataType string, content []byte) {
 
 // onClipboardChange 剪贴板变化回调（服务器模式，V1.1 二进制协议）
 func (a *App) onClipboardChange(data clipboard.ClipboardData) {
+	// 远程内容写回系统剪贴板会再次触发本地监听。这不是用户的新复制：
+	// 若照常记日志并广播，同一条内容会在两端来回重复出现。
+	if a.clip.isSelfEcho(clipSig(data.Type, data.Content)) {
+		return
+	}
+
 	switch data.Type {
 	case "text":
 		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)), data.Type, data.Content)
@@ -441,6 +459,10 @@ func (a *App) onClipboardChange(data clipboard.ClipboardData) {
 
 // onClipboardChangeClient 剪贴板变化回调（客户端模式，V1.1 二进制协议）
 func (a *App) onClipboardChangeClient(data clipboard.ClipboardData) {
+	if a.clip.isSelfEcho(clipSig(data.Type, data.Content)) {
+		return
+	}
+
 	switch data.Type {
 	case "text":
 		a.onLogClip("INFO", fmt.Sprintf("检测到剪贴板文本变化: %d 字符", len(data.Content)), data.Type, data.Content)
@@ -474,6 +496,9 @@ func (a *App) onClipboardReceivedBinary(dataType string, content []byte) {
 	case "image":
 		data.MimeType = "image/png"
 	}
+
+	// 先登记回声源：写回系统剪贴板必然触发本地监听，那份上报要当作同一条内容吞掉
+	a.clip.markWritten(clipSig(dataType, content))
 
 	err := a.clipboardMon.SetClipboard(data)
 	if err != nil {
