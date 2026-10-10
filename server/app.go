@@ -156,11 +156,13 @@ func (a *App) ApplySettings(settingsJSON string) error {
 	// 关闭偏好必须先生效；开机自启写入失败不应让窗口行为退回默认值
 	a.settingsMu.Lock()
 	a.settings.CloseAction = s.CloseAction
-	a.settings.MaxLogs = s.MaxLogs
 	a.settingsMu.Unlock()
 	if err := a.applyMaxLogs(s.MaxLogs); err != nil {
 		return err
 	}
+	a.settingsMu.Lock()
+	a.settings.MaxLogs = s.MaxLogs
+	a.settingsMu.Unlock()
 
 	// OS 级开机自启：Windows 走注册表 Run 键（纯 Go），
 	// macOS/Linux 沿用 go-autostart，见 autostart_windows.go / autostart_other.go
@@ -332,21 +334,24 @@ func (a *App) flushLogs() {
 }
 
 func (a *App) saveLogStore() error {
-	path := a.logStorePath
-	if a.logStoreErr != nil {
-		return fmt.Errorf("原记录文件无法读取，已保留原文件: %w", a.logStoreErr)
-	}
-	if path == "" {
-		return nil
-	}
-
 	// 在取快照前串行化写入，避免较早的快照覆盖清空或缩小数量后的新状态。
 	a.writeMu.Lock()
 	defer a.writeMu.Unlock()
 	a.logsMu.RLock()
+	store, pending := a.recordSnapshot(a.logs, a.maxLogs)
+	a.logsMu.RUnlock()
+	if err := a.writeRecordSnapshot(store, pending); err != nil {
+		return err
+	}
+	return a.finishLogSave(store, pending)
+}
+
+// recordSnapshot 调用方持有 logsMu，快照中的内容字节不再修改。
+func (a *App) recordSnapshot(logs []LogEntry, maxLogs int) (logStore, map[int64][]byte) {
 	a.contentsMu.RLock()
+	defer a.contentsMu.RUnlock()
 	store := logStore{
-		Logs: append([]LogEntry{}, a.logs...), MaxLogs: a.maxLogs,
+		Logs: append([]LogEntry{}, logs...), MaxLogs: maxLogs,
 		NextContentID: a.contentNext, Contents: make(map[int64]string),
 	}
 	pending := make(map[int64][]byte)
@@ -358,9 +363,17 @@ func (a *App) saveLogStore() error {
 			}
 		}
 	}
-	a.contentsMu.RUnlock()
-	a.logsMu.RUnlock()
+	return store, pending
+}
 
+func (a *App) writeRecordSnapshot(store logStore, pending map[int64][]byte) error {
+	if a.logStoreErr != nil {
+		return fmt.Errorf("原记录文件无法读取，已保留原文件: %w", a.logStoreErr)
+	}
+	path := a.logStorePath
+	if path == "" {
+		return nil
+	}
 	if len(pending) > 0 {
 		if err := os.MkdirAll(filepath.Join(filepath.Dir(path), "contents"), 0o700); err != nil {
 			return err
@@ -378,6 +391,13 @@ func (a *App) saveLogStore() error {
 	if err := writeLocalFile(path, raw); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (a *App) finishLogSave(store logStore, pending map[int64][]byte) error {
+	if a.logStorePath == "" {
+		return nil
+	}
 	// 已落盘内容按需读取，不让保留数量决定常驻图片内存。
 	a.contentsMu.Lock()
 	for id := range pending {
@@ -387,27 +407,42 @@ func (a *App) saveLogStore() error {
 		}
 	}
 	a.contentsMu.Unlock()
-	return cleanupContentFiles(path, store)
+	return cleanupContentFiles(a.logStorePath, store)
 }
 
 // applyMaxLogs 更新记录上限并按序裁剪（超出部分删除最早的记录）
 func (a *App) applyMaxLogs(n int) error {
 	n = min(max(n, minMaxLogs), maxMaxLogs)
+	return a.retainLogs(n)
+}
+
+// retainLogs 先保存候选记录，再更新内存；n=0 清空但保留数量设置。
+func (a *App) retainLogs(n int) error {
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
 	a.logsMu.Lock()
-	a.maxLogs = n
-	trimmed := len(a.logs) > n
-	if trimmed {
-		a.logs = a.logs[:n]
+	logs, maxLogs := a.logs, a.maxLogs
+	if n == 0 {
+		logs = nil
+	} else {
+		maxLogs = n
 	}
+	if len(logs) > n {
+		logs = logs[:n]
+	}
+	store, pending := a.recordSnapshot(logs, maxLogs)
+	if err := a.writeRecordSnapshot(store, pending); err != nil {
+		a.logsMu.Unlock()
+		return err
+	}
+	a.logs, a.maxLogs = logs, maxLogs
 	a.pruneContents()
-	snapshot := make([]LogEntry, len(a.logs))
-	copy(snapshot, a.logs)
 	a.logsMu.Unlock()
 
-	if trimmed && a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "logs:updated", snapshot)
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "logs:updated", store.Logs)
 	}
-	return a.saveLogStore()
+	return a.finishLogSave(store, pending)
 }
 
 // pruneContents 调用方持有 logsMu，只保留仍被记录引用的内容。
@@ -538,17 +573,7 @@ func (a *App) GetLogs() []LogEntry {
 
 // ClearLogs 清空日志
 func (a *App) ClearLogs() error {
-	a.logsMu.Lock()
-	a.logs = make([]LogEntry, 0)
-	a.pruneContents()
-	empty := a.logs
-	a.logsMu.Unlock()
-
-	if a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "logs:updated", empty)
-	}
-	// 清空同样落盘，否则重启后旧记录会重新出现
-	return a.saveLogStore()
+	return a.retainLogs(0)
 }
 
 // storeContent 暂存剪贴板内容，返回内容 ID（不可暂存时返回 0）

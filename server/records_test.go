@@ -267,3 +267,33 @@ func TestRetentionIgnoresUnrelatedFiles(t *testing.T) {
 		t.Fatal("清理删除了不属于记录的文件")
 	}
 }
+
+func TestFailedRetentionKeepsMemoryAndDiskRecords(t *testing.T) {
+	a := recordTestApp(t)
+	for i := 0; i < 60; i++ {
+		addRecord(a, "text", []byte(fmt.Sprintf("preserved-%d", i)))
+	}
+	if err := a.saveLogStore(); err != nil {
+		t.Fatal(err)
+	}
+	path := a.logStorePath
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.logStorePath = filepath.Join(t.TempDir(), "missing-dir", "logs.json")
+	if err := a.ClearLogs(); err == nil {
+		t.Fatal("清空写入失败应报错")
+	}
+	if err := a.applyMaxLogs(50); err == nil {
+		t.Fatal("数量修改写入失败应报错")
+	}
+	a.logStorePath = path
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, raw) || len(a.logs) != 60 || len(a.contents) != 60 || a.maxLogs != 500 {
+		t.Fatal("写入失败丢弃了原内存或磁盘记录")
+	}
+	if a.GetLogContent(a.logs[59].ContentID)["text"] != "preserved-0" {
+		t.Fatal("写入失败后原文不可读")
+	}
+}
