@@ -110,7 +110,11 @@
   - 先手写了 modal 查看器，实测发现本仓库锁定的 naive-ui 2.43 `n-modal` **完全不处理 Esc**（modal 源码里没有任何 keydown，全库只有 `image/ImagePreview.mjs` 等 7 个组件监听 Escape），手写的退出路径只能靠点按钮 → 改用组件库自带 `n-image` 预览：滚轮缩放、拖拽平移、旋转/翻转、工具栏、Esc 关闭全部现成
   - 缩略图改为 `n-image`（宽高仍走 T10.4 的自定义尺寸，`object-fit: contain` + `max-width:100%`），条目下方常驻一行 `720 × 420 px · 41.0 KB · 点击可放大`（原始像素尺寸在图片加载后测得，体积取后端暂存的字节数）
   - 验证：vue-tsc + vite build 通过；无头 Chrome 实测缩略图尺寸/信息行渲染正确。放大预览的"点开→缩放→Esc 关闭"交互链路在沙箱内无法驱动（外部浏览器连接中断、无头模式过渡动画不落地），列入真机验收 T11 清单第 18 项
-- [ ] T10.6 整体测试：全量校验门 + wails build 产物 + 真机验收清单更新
+- [x] T10.6 整体测试与文档 — commit: test/docs: 本轮整体校验与真机验收清单
+  - 校验门全绿：`go build` / `go vet` / `go test -count=1`（CGO_ENABLED=0）、darwin+linux 交叉编译、`npm run build`（vue-tsc + vite）、`wails build` 产出 12.5MB exe（27.3s）
+  - README 桌面端特性段重写（三栏工作区 / 默认隐藏 / 尺寸自定义 / 放大预览 / 去重与回声抑制），fork 归属行同步
+  - 沙箱内 GUI 冒烟未通过环境关：从 `build/bin` 直接起 exe 时 WebView2 报"无法读取和写入其数据目录 `…\NextPaste Server.exe\EBWebView`"（把 exe 路径当目录用），应用窗口起不来 → 端到端交互全部转入第 9 节验收清单 15–22 项
+  - 外部浏览器连接（Qoder Browser Connector）中途断开，放大预览的打开/关闭链路改由无头 Chrome + 源码级核对（`n-image` 渲染出 `data-preview-src`、`ImagePreview.mjs` 监听 Escape）双重确认
 
 ## 7. 本轮不做（含原因）
 
@@ -138,6 +142,11 @@
 | 2026-10-10 | T6(响应式) | 响应式布局：窗口宽度驱动侧栏（420/380/320 三档断点）与日志列宽（compact<1100 内容列弹性化），最小窗口 900px 下仍可读 | frontend/{AppInner.vue、LogViewerPanel.vue} | vue-tsc + vite build 通过；拖动窗口实测归入验收清单 |
 | 2026-10-10 | T9.x | 品牌整理：传笺 logo 去棋盘底入库（docs/assets/），README 换头图并统一命名为传笺 ChuanJian；桌面端应用图标（appicon.png / windows/icon.ico）替换为传笺 logo；.gitignore 放行图标源文件 | docs/assets/*.png、README.md、server/build/appicon.png、server/build/windows/icon.ico、.gitignore | 透明底与多尺寸渲染自查通过；wails build 重建 exe，图标生效 |
 | 2026-10-10 | T10.1 | 「每条内容出现两边」根因定位并修复：一条内容在单链路被多层各记一行（server `handleBinaryText` 记"收到…" + App `onClipboardReceivedBinary` 记"已接收并写入…"；本地则是"检测到…" + `BroadcastClipboardBinary` 记"广播…"），且远程内容写回系统剪贴板必然触发本地监听，monitor 的按类型 hash 守卫挡不住跨类型触发，于是同一内容在两端来回各冒一次。改为 App 层内容签名台账（`clip_ledger.go`，3s 窗口 / 64 容量）：`onLogFull` 去重只留首条，`onClipboardChange(Client)` 入口吞掉自写回声（不记不播）。顺带修 `Timestamp` 恒为 0 导致所有行显示当前时刻 | server/clip_ledger.go、clip_ledger_test.go、app.go | go build/vet 通过；go test 5 项台账单测全 PASS（去重/窗口过期重记/类型隔离/回声识别与超时/容量淘汰） |
+| 2026-10-10 | T10.2 | 布局重构：删掉 `n-layout has-sider` 左栏，工作模式 / 配置表单 / 连接信息并排进顶部条，可收起为一行状态摘要（`np:workBand`），主体让位给日志；`ConnectionInfoCard` 加 `listMaxHeight`（条内 150px）。顺带修真 bug：地址行用 `n-code` 但未配 hljs → 控制台 `[naive/code]: hljs is not set.` 且**地址文字完全不渲染**（只剩三个图标），改为自带样式的等宽文本 | frontend/{AppInner.vue、components/ConnectionInfoCard.vue} | vue-tsc 通过；浏览器实测展开/收起、三条 ws:// 地址可见、日志满宽 |
+| 2026-10-10 | T10.3 | 第三列剪切板面板（默认隐藏）：新增 `ClipboardContentPanel.vue`，条目 = clipboard 分类且有暂存原文的日志；遮罩态文本不露字形、图片只显体积，单条眼睛 + 全局开关（`np:clipReveal`）；原文按需拉取，隐藏态完全不请求。日志表删掉「剪贴板内容」列及其图片懒加载/复制代码，回归四列事件流水 | frontend/{components/ClipboardContentPanel.vue、AppInner.vue、components/LogViewerPanel.vue、types/index.ts、components.d.ts} | vue-tsc 通过；浏览器实测 5 条（3 文本 2 图）默认全遮罩 → 单条揭示拿到全文并保留换行 → 全局开关一次揭示且图片不溢出列宽 |
+| 2026-10-10 | T10.4 | 条目尺寸自定义：新增 `utils/clipLayout.ts`（默认值 + 范围钳制 + localStorage），面板头部「尺寸」弹层四行滑块与数字框联动控制文本框宽高 / 图片宽高，恢复默认一键回 320×140 / 200×140；图片按盒子理解（contain 居中 + max-width 100% 不溢出），遮罩套同一尺寸避免揭示时跳动；第三列左缘支持拖拽调宽（260–760，双击恢复），窄窗口按"窗口宽-660"回退 | frontend/{utils/clipLayout.ts、components/ClipboardContentPanel.vue、AppInner.vue} | vue-tsc 通过；浏览器实测图片宽 420 → 渲染被列宽夹到 326.4px 且落盘、拖拽列宽 380→510 持久化、恢复默认回到 200px |
+| 2026-10-10 | T10.5 | 图片放大预览：先手写 modal 查看器，实测发现本仓库 naive-ui 2.43 的 `n-modal` 源码里**没有任何 keydown**（全库仅 ImagePreview 等 7 个组件处理 Escape）→ 手写的查看器没有键盘退出，遂改用组件库 `n-image` 自带预览（滚轮缩放 / 拖拽平移 / 旋转翻转 / 工具栏 / Esc 关闭全现成）；缩略图仍走 T10.4 尺寸，条目下常驻"原始像素尺寸 · 体积 · 点击可放大" | frontend/components/ClipboardContentPanel.vue | vue-tsc + vite build 通过；无头 Chrome 确认缩略图与信息行渲染、img 带 `data-preview-src` 且未加 preview-disabled；打开/关闭交互列入真机验收第 19 项 |
+| 2026-10-10 | T10.6 | 整体测试与文档：全量校验门 + `wails build` 产物 + README 桌面端特性段重写（三栏工作区 / 默认隐藏 / 尺寸自定义 / 放大预览 / 去重与回声抑制）+ 验收清单 15–22 项；沙箱内从 `build/bin` 起 GUI 失败（WebView2 报无法读写 `…\NextPaste Server.exe\EBWebView`，把 exe 当目录），端到端交互全部转入真机验收 | README.md、todo.md | go build/vet/test（-count=1）、darwin+linux 交叉编译、npm run build、wails build（27.3s / 12.5MB）全部通过 |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 
@@ -158,4 +167,17 @@
 | 11 | 打开日志面板查看分类筛选 | 默认只显示"剪贴板"分类日志；切"全部分类"后连接/系统日志出现；"分类"列 tag 颜色区分 |
 | 12 | 手机复制一张图片 | 日志"剪贴板内容"列渲染出图片缩略图（非文字描述）；点该行复制图标 → 提示"已复制到剪贴板"，粘贴验证图片可用 |
 | 13 | 点一条文本日志的复制图标 | 该文本写回系统剪贴板，并作为本地复制同步到对端 |
-| 14 | 拖动窗口边缘改变宽度（1200 / 1100 / 1000 / 900 附近） | 侧栏宽度随断点变化（420/380/320），日志列宽自适应，内容不被挤压遮挡 |
+| 14 | 拖动窗口边缘改变宽度（1500 / 1200 / 1100 / 900 附近） | ~~侧栏断点~~ 已被本轮需求十一取代：现在校验顶部条是否随宽度换行、日志列是否切紧凑宽度、第三列是否被限制在"窗口宽-660"以内而不挤没日志 |
+
+### 本轮新增（2026-10-10 下午，需求十~十三）
+
+| # | 操作 | 预期 |
+|---|---|---|
+| 15 | 手机复制一段文本，看 PC 日志 | 只出现**一行**"收到文本数据 … 来自 <设备>"，不再同时冒出"已接收并写入文本数据"；第三列同步出现该条且默认遮罩 |
+| 16 | PC 本地复制一段文本 | 只出现一行"检测到剪贴板文本变化"，不再有"广播剪贴板数据"第二行；对端也只收到一次 |
+| 17 | 手机复制 → PC 揭示该条 → 点复制回剪贴板 | 两端都不再刷屏：写回系统剪贴板触发的监听回声被吞掉，不产生新日志、不二次广播 |
+| 18 | 连续两次复制**完全相同**的内容（间隔 > 3s） | 两条独立记录（去重窗口 3s，只压链路内的重复，不压用户真的重复复制） |
+| 19 | 第三列点图片缩略图 | 打开大图预览：滚轮/工具栏缩放、拖拽平移、旋转翻转、Esc 或点遮罩关闭；条目上常驻"宽 × 高 px · 体积 · 点击可放大" |
+| 20 | 头部"显示内容"开关 + 单条眼睛按钮 | 开关管全局、眼睛做单条反向覆盖；重启后记住全局开关状态（`np:clipReveal`），默认仍是隐藏 |
+| 21 | 「尺寸」弹层调文本框宽高 / 图片宽高；拖第三列左缘；双击左缘 | 实时生效并持久化（`np:clipSizes`）；列宽持久化（`np:clipPanelWidth`）；双击回到默认 380px；恢复默认按钮回到 320×140 / 200×140 |
+| 22 | 顶部条点"收起配置"后重启 | 只留模式 tabs + 一行状态摘要（`np:workBand` 记住），日志区高度变大；连接信息里地址文字可见（ws://…），图钉/二维码/复制可用 |
