@@ -14,6 +14,7 @@ import {
   GetClientStatus,
   GetLogs,
   GetServerStatus,
+  HideWindow,
   Quit,
   StartServer,
   StopServer
@@ -241,12 +242,11 @@ const handleCloseOrQuit = async () => {
     await Quit()
     return
   }
-  WindowMinimise()
-  message.info('已最小化到任务栏，后台保持同步')
+  await HideWindow()
 }
 
 const closeTip = computed(() =>
-  settings.value.closeAction === 'close' ? '退出' : '最小化到任务栏'
+  settings.value.closeAction === 'close' ? '退出应用' : '隐藏到系统托盘'
 )
 
 onMounted(() => {
@@ -360,7 +360,7 @@ type Settings = {
   autoStartEnabled: boolean
   autoStartMode: AutoStartMode
   autoStartActionEnabled: boolean
-  closeAction: 'minimize' | 'close'
+  closeAction: 'tray' | 'close'
 }
 
 const SETTINGS_KEY = 'np:settings'
@@ -369,7 +369,7 @@ const settings = ref<Settings>({
   autoStartEnabled: false,
   autoStartMode: 'server',
   autoStartActionEnabled: false,
-  closeAction: 'minimize'
+  closeAction: 'tray'
 })
 
 watchEffect(() => {
@@ -381,7 +381,7 @@ watchEffect(() => {
       autoStartEnabled: Boolean(obj.autoStartEnabled),
       autoStartMode: obj.autoStartMode === 'client' ? 'client' : 'server',
       autoStartActionEnabled: Boolean(obj.autoStartActionEnabled),
-      closeAction: obj.closeAction === 'close' ? 'close' : 'minimize'
+      closeAction: obj.closeAction === 'close' ? 'close' : 'tray'
     }
   } catch {
     // ignore
@@ -441,18 +441,23 @@ let applySettingsTimer: number | undefined
 
 watch(
   settings,
-  () => {
+  (_current, previous) => {
     window.clearTimeout(applySettingsTimer)
-    applySettingsTimer = window.setTimeout(async () => {
+    const apply = async () => {
       try {
         await ApplySettings(JSON.stringify(settings.value))
       } catch (error) {
         message.error(`开机自启设置未生效：${String(error)}`)
         await refreshAutostartStatus()
       }
-    }, 300)
+    }
+    if (previous === undefined) {
+      void apply()
+    } else {
+      applySettingsTimer = window.setTimeout(apply, 300)
+    }
   },
-  { deep: true }
+  { deep: true, immediate: true }
 )
 </script>
 

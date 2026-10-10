@@ -16,7 +16,7 @@ type Settings struct {
 	AutoStartEnabled       bool          `json:"autoStartEnabled"`
 	AutoStartActionEnabled bool          `json:"autoStartActionEnabled"`
 	AutoStartMode          AutoStartMode `json:"autoStartMode"`
-	CloseAction            string        `json:"closeAction"` // "minimize" | "close"
+	CloseAction            string        `json:"closeAction"` // "tray" | "close"
 }
 
 func getExecPath() (string, error) {

@@ -20,7 +20,7 @@ type Settings = {
   autoStartEnabled: boolean
   autoStartMode: AutoStartMode
   autoStartActionEnabled: boolean
-  closeAction: 'minimize' | 'close'
+  closeAction: 'tray' | 'close'
 }
 
 interface Props {
@@ -80,7 +80,7 @@ const handleQuitApp = async () => {
               随操作系统自动启动
             </n-checkbox>
             <div style="margin-top: 4px; font-size: 12px">
-              <n-text depth="3">开机后静默最小化启动，建议同时开启下方"启动后自动执行"</n-text>
+              <n-text depth="3">开机后隐藏到系统托盘，建议同时开启下方"启动后自动执行"</n-text>
             </div>
           </div>
         </n-form-item>
@@ -111,7 +111,7 @@ const handleQuitApp = async () => {
         <n-form-item label="关闭按钮">
           <n-radio-group v-model:value="settings.closeAction" name="action">
             <n-space vertical :size="4">
-              <n-radio value="minimize">最小化到任务栏（后台保持同步）</n-radio>
+              <n-radio value="tray">隐藏到系统托盘（后台保持同步）</n-radio>
               <n-radio value="close">退出应用程序</n-radio>
             </n-space>
           </n-radio-group>
@@ -119,7 +119,7 @@ const handleQuitApp = async () => {
 
         <n-form-item label="说明">
           <n-text depth="3" style="font-size: 12px">
-            最小化驻留时，任务栏图标可随时点回窗口；需要完全退出请点右下角"退出应用"
+            隐藏后可点系统托盘图标，选择“显示窗口”；需要完全退出可从托盘菜单或此处操作
           </n-text>
         </n-form-item>
       </div>

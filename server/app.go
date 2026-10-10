@@ -77,7 +77,7 @@ func NewApp() *App {
 			AutoStartEnabled:       false,
 			AutoStartActionEnabled: false,
 			AutoStartMode:          AutoStartModeServer,
-			CloseAction:            "minimize",
+			CloseAction:            "tray",
 		},
 		launchFlags: LaunchFlags{},
 	}
@@ -124,8 +124,12 @@ func (a *App) ApplySettings(settingsJSON string) error {
 		s.AutoStartMode = AutoStartModeServer
 	}
 	if s.CloseAction != "close" {
-		s.CloseAction = "minimize"
+		s.CloseAction = "tray"
 	}
+	// 关闭偏好必须先生效；开机自启写入失败不应让窗口行为退回默认值
+	a.settingsMu.Lock()
+	a.settings.CloseAction = s.CloseAction
+	a.settingsMu.Unlock()
 
 	// OS 级开机自启：Windows 走注册表 Run 键（纯 Go），
 	// macOS/Linux 沿用 go-autostart，见 autostart_windows.go / autostart_other.go
