@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   NButton,
   NCheckbox,
   NDivider,
   NForm,
   NFormItem,
+  NInputNumber,
   NModal,
   NRadio,
   NRadioGroup,
   NSpace,
   NText,
 } from 'naive-ui'
-import { Quit } from '../../wailsjs/go/main/App'
+import { GetLogStorePath, Quit } from '../../wailsjs/go/main/App'
 
 // ... 类型定义保持不变 ...
 type AutoStartMode = 'server' | 'client'
@@ -21,6 +22,7 @@ type Settings = {
   autoStartMode: AutoStartMode
   autoStartActionEnabled: boolean
   closeAction: 'tray' | 'close'
+  maxLogs: number
 }
 
 interface Props {
@@ -44,6 +46,17 @@ const show = computed({
 const settings = computed({
   get: () => props.settings,
   set: (v: Settings) => emit('update:settings', v)
+})
+
+// 本地记录文件位置（“数据放在本地”，让用户看得见存在哪）
+const storePath = ref('')
+
+onMounted(async () => {
+  try {
+    storePath.value = await GetLogStorePath()
+  } catch {
+    // ignore
+  }
 })
 
 const handleQuitApp = async () => {
@@ -120,6 +133,34 @@ const handleQuitApp = async () => {
         <n-form-item label="说明">
           <n-text depth="3" style="font-size: 12px">
             隐藏后可点系统托盘图标，选择“显示窗口”；需要完全退出可从托盘菜单或此处操作
+          </n-text>
+        </n-form-item>
+      </div>
+
+      <n-divider style="margin: 16px 0" />
+
+      <div class="settings-section">
+        <n-text depth="3" strong class="section-title">记录与数据</n-text>
+
+        <n-form-item label="记录数量">
+          <div>
+            <n-input-number
+              v-model:value="settings.maxLogs"
+              :min="50"
+              :max="10000"
+              :step="50"
+              size="small"
+              style="width: 160px"
+            />
+            <div style="margin-top: 4px; font-size: 12px">
+              <n-text depth="3">记录保存在本机，超出数量后按时间顺序删除最早的记录</n-text>
+            </div>
+          </div>
+        </n-form-item>
+
+        <n-form-item label="存储位置">
+          <n-text depth="3" style="font-size: 12px; word-break: break-all">
+            {{ storePath || '应用启动后显示' }}
           </n-text>
         </n-form-item>
       </div>

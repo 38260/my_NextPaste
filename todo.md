@@ -2,6 +2,31 @@
 
 > 规划文档：docs/feature-plan-2026-10-10.md · 每完成一项勾选并同步 commit
 
+## 18. 本轮（2026-10-10 晚）：品牌图标 / 记录本地化 / 服务器设备数 / 日志内容列
+
+> 用户四项诉求：① 用项目根目录 `logo.png` 替换桌面端图标与标题栏 logo；② 记录放本地、可自定义数量、超量按顺序删最早；③ 展示"本机作为服务器 + 已连接设备数"；④ 日志表"内容"列替换为"剪贴板内容"列。
+
+- [x] T18.1 品牌资源：从根目录 `logo.png`（1254×1254 白底，含"传笺 ChuanJian"名称与标语）提取**图形标识**——按最小通道做白底键出（奶白色信笺不被掏空）、反预乘消边缘白圈、紧致裁剪，得 912×499 透明标识
+  - 应用图标 `server/build/appicon.png`（1024，圆角白底贴片，标识居中留 7% 呼吸位）+ `server/build/windows/icon.ico`（16/24/32/48/64/128/256 七档）
+  - 标题栏标识 `server/frontend/src/assets/images/logo-mark.png`（234×128 透明，2 倍图供 28px 显示）
+  - 只取图形部分：完整 logo 含中英文名称与标语，在 56px 标题栏与 16–32px 图标尺寸下文字不可辨
+  - 验证：新 exe 内嵌 7 档图标与 `windows/icon.ico` 的 PNG 数据逐字节一致（7/7），旧 exe 0/7
+- [x] T18.2 标题栏接入 logo：`AppInner.vue` 头部在应用名前加 28px 标识（保留 "NextPaste Server" 文案与 NPBP 标签，未改应用命名）
+- [x] T18.3 记录本地持久化 + 可配置数量（超量按序删除）
+  - 新增 `server/logstore.go`：路径 `%AppData%\NextPaste\logs.json`（用户配置目录，不动系统全局配置）；原子写（临时文件 + rename）；文件缺失视为空、损坏退回空并报错但不阻断启动
+  - `app.go`：`startup` 加载历史记录、`shutdown` 落盘；`onLogFull` 走 800ms **节流**合并窗口异步落盘（非防抖，持续日志也能写出）；`ClearLogs` 清空后立即落盘
+  - `Settings` 增加 `maxLogs`（默认 500，范围 50–10000）；`ApplySettings` 归一化并**即时裁剪**（缩小上限立刻删最早记录）
+  - 前端：设置面板新增「记录与数据」区（「记录数量」数字框 + 「存储位置」路径），设置随 `np:settings` 持久化并提交后端
+  - 验证：7 项单测 PASS（存取往返 / 缺失文件 / 损坏文件 / 超量裁剪 / 未超量不裁剪 / 立即落盘 / 空路径不 panic / 合并窗口内落盘）
+- [x] T18.4 服务器已连接设备展示
+  - 后端：`App.GetServerClients()` 暴露 `ws.Server.GetClients()`（设备名 / 平台 / 连接时间）
+  - 前端：表头标签由「客户端 N」改为「已连接 N 台设备」并支持悬浮看明细；顶部条摘要改为「本机作为服务器 · 端口 X · 已连接 N 台设备」
+  - 顺带修：状态刷新由"并发触发"改为"按序刷新"（设备列表依赖服务器状态），否则首屏设备明细为空
+- [x] T18.5 日志表列调整：第 3 列由「内容」（事件描述）替换为「剪贴板内容」（`preview`）；无预览的记录（连接/系统）回退显示事件描述，避免整列空白；右侧剪切板面板保持不变
+- [x] T18.6 整体校验：`go build` / `go vet` / `go test -count=1`（CGO_ENABLED=0）、darwin+linux 交叉编译、`npm run build`（vue-tsc + vite）、`wails build` 产出 12.8MB exe 全部通过
+  - 无头 Chrome + CDP（注入 Wails 模拟接口）11/11 PASS：标题栏 logo 尺寸 28px 且资源加载成功、列头为「级别/分类/剪贴板内容/时间」、预览与回退渲染正确、表头与顶部条设备数文案正确、悬浮出设备明细、`np:settings` 含 maxLogs=500、设置面板含「记录数量/存储位置」且默认 500
+  - 真机待验收项见第 9 节 24–27 项
+
 ## 17. 桌面快捷方式切换到托盘版（2026-10-10）
 
 - [x] T13.1 更新现有桌面 `NextPaste.lnk`：使用 `-minimized` 隐藏启动，工作目录与图标同步切换，原快捷方式位置不变。发现 exe 文件名决定 Wails 用户配置目录后，最终目标改回原文件名 `server/build/bin/NextPaste Server.exe`（该文件已替换为托盘版）。提交：`docs: 记录桌面快捷方式切换`。
@@ -171,6 +196,7 @@
 | 2026-10-10 | T10.4 | 条目尺寸自定义：新增 `utils/clipLayout.ts`（默认值 + 范围钳制 + localStorage），面板头部「尺寸」弹层四行滑块与数字框联动控制文本框宽高 / 图片宽高，恢复默认一键回 320×140 / 200×140；图片按盒子理解（contain 居中 + max-width 100% 不溢出），遮罩套同一尺寸避免揭示时跳动；第三列左缘支持拖拽调宽（260–760，双击恢复），窄窗口按"窗口宽-660"回退 | frontend/{utils/clipLayout.ts、components/ClipboardContentPanel.vue、AppInner.vue} | vue-tsc 通过；浏览器实测图片宽 420 → 渲染被列宽夹到 326.4px 且落盘、拖拽列宽 380→510 持久化、恢复默认回到 200px |
 | 2026-10-10 | T10.5 | 图片放大预览：先手写 modal 查看器，实测发现本仓库 naive-ui 2.43 的 `n-modal` 源码里**没有任何 keydown**（全库仅 ImagePreview 等 7 个组件处理 Escape）→ 手写的查看器没有键盘退出，遂改用组件库 `n-image` 自带预览（滚轮缩放 / 拖拽平移 / 旋转翻转 / 工具栏 / Esc 关闭全现成）；缩略图仍走 T10.4 尺寸，条目下常驻"原始像素尺寸 · 体积 · 点击可放大" | frontend/components/ClipboardContentPanel.vue | vue-tsc + vite build 通过；无头 Chrome 确认缩略图与信息行渲染、img 带 `data-preview-src` 且未加 preview-disabled；打开/关闭交互列入真机验收第 19 项 |
 | 2026-10-10 | T10.6 | 整体测试与文档：全量校验门 + `wails build` 产物 + README 桌面端特性段重写（三栏工作区 / 默认隐藏 / 尺寸自定义 / 放大预览 / 去重与回声抑制）+ 验收清单 15–22 项；沙箱内从 `build/bin` 起 GUI 失败（WebView2 报无法读写 `…\NextPaste Server.exe\EBWebView`，把 exe 当目录），端到端交互全部转入真机验收 | README.md、todo.md | go build/vet/test（-count=1）、darwin+linux 交叉编译、npm run build、wails build（27.3s / 12.5MB）全部通过 |
+| 2026-10-10 | T18.x | 品牌图标（根目录 logo.png 提取图形标识：白底键出 + 反预乘 + 紧致裁剪）接入 exe/任务栏/托盘图标与标题栏；记录本地持久化（`%AppData%\NextPaste\logs.json`，原子写、启动加载、800ms 节流落盘、退出前 flush）与 `maxLogs` 可配置（50–10000，缩小即裁剪）；`GetServerClients` 暴露设备明细，表头/顶部条改为"本机作为服务器 · 已连接 N 台设备"+悬浮明细；日志表第 3 列由"内容"改为"剪贴板内容"（无预览回退事件描述）；顺带修状态刷新按序化避免首屏设备明细为空 | server/logstore.go、logstore_test.go、app.go、settings.go、build/appicon.png、build/windows/icon.ico、frontend/src/{AppInner.vue、components/{LogViewerPanel.vue、SettingsModal.vue}、assets/images/logo-mark.png}、wailsjs/go/main/{App.d.ts,App.js} | go build/vet/test（-count=1，7 项新单测 PASS）、darwin+linux 交叉编译、npm run build、wails build（20.8s / 12.8MB）、新 exe 图标 7/7 字节一致、无头 Chrome+CDP 11/11 PASS |
 
 ## 9. 验收清单（真机确认，wails build 后执行）
 
@@ -206,3 +232,12 @@
 | 21 | 「尺寸」弹层调文本框宽高 / 图片宽高；拖第三列左缘；双击左缘 | 实时生效并持久化（`np:clipSizes`）；列宽持久化（`np:clipPanelWidth`）；双击回到默认 380px；恢复默认按钮回到 320×140 / 200×140 |
 | 22 | 顶部条点"收起配置"后重启 | 只留模式 tabs + 一行状态摘要（`np:workBand` 记住），日志区高度变大；连接信息里地址文字可见（ws://…），图钉/二维码/复制可用 |
 | 23 | 顶部布局优化验收：使用最新前端启动桌面开发版或重新构建 exe，切换服务器 / 客户端，在 900 / 1200 / 1500px 宽度检查顶部并切换深浅主题 | 模式、状态、收起按钮同一行；监听地址、端口与启停按钮同排；配置与连接区顶端对齐，地址操作靠右；收起后日志区高度增加；运行时输入禁用但停止 / 断开按钮可用；二维码扫码及实际连接正常 |
+
+### 本轮新增（2026-10-10 晚，T18.1–T18.5）
+
+| # | 操作 | 预期 |
+|---|---|---|
+| 24 | 重启桌面端后看 exe / 任务栏 / 托盘图标与标题栏 | 图标为传笺标识（笔记本电脑+信笺+手机）；标题栏左侧出现标识，右侧文案与 NPBP 标签不变 |
+| 25 | 制造若干条同步记录后完全退出应用，再重新打开 | 记录仍在（读自 `%AppData%\NextPaste\logs.json`）；设置面板「存储位置」显示该路径；点「清空」后重启不再回来 |
+| 26 | 设置面板把「记录数量」改小（如 100）并观察 | 立即只保留最新 100 条（更早的记录被删除）；重启后仍是 100 条上限 |
+| 27 | 服务器模式下手机连接 | 表头显示「已连接 N 台设备」，悬浮可看设备名 / 平台 / 连接时间；顶部条摘要为「本机作为服务器 · 端口 X · 已连接 N 台设备」；日志表第 3 列为「剪贴板内容」，文本记录显示内容预览、连接/系统记录显示事件描述 |

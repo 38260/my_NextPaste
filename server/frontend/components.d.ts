@@ -19,6 +19,7 @@ declare module 'vue' {
     NIcon: typeof import('naive-ui')['NIcon']
     NLayout: typeof import('naive-ui')['NLayout']
     NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
+    NPopover: typeof import('naive-ui')['NPopover']
     NRadioButton: typeof import('naive-ui')['NRadioButton']
     NRadioGroup: typeof import('naive-ui')['NRadioGroup']
     NSpace: typeof import('naive-ui')['NSpace']

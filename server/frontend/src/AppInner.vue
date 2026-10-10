@@ -13,6 +13,7 @@ import {
   GetAutostartStatus,
   GetClientStatus,
   GetLogs,
+  GetServerClients,
   GetServerStatus,
   HideWindow,
   Quit,
@@ -29,6 +30,8 @@ import LogViewerPanel from './components/LogViewerPanel.vue'
 import ClipboardContentPanel from './components/ClipboardContentPanel.vue'
 import StatusIndicatorTag from './components/StatusIndicatorTag.vue'
 import SettingsModal from './components/SettingsModal.vue'
+
+import logoMark from './assets/images/logo-mark.png'
 
 import {
   DEFAULT_PANEL_WIDTH,
@@ -173,6 +176,28 @@ const updateStatus = async () => {
   }
 }
 
+// 服务器模式下已连接设备的明细（“本机作为服务器，有多少设备已连接”）
+interface ServerClient {
+  id: string
+  deviceName: string
+  platform: string
+  connTime: string
+}
+
+const serverClients = ref<ServerClient[]>([])
+
+const updateServerClients = async () => {
+  if (mode.value !== 'server' || !status.value.isRunning) {
+    if (serverClients.value.length) serverClients.value = []
+    return
+  }
+  try {
+    serverClients.value = (await GetServerClients()) as ServerClient[]
+  } catch {
+    // ignore
+  }
+}
+
 const loadLogs = async () => {
   try {
     const logList = await GetLogs()
@@ -249,17 +274,22 @@ const closeTip = computed(() =>
   settings.value.closeAction === 'close' ? '退出应用' : '隐藏到系统托盘'
 )
 
+// 设备列表依赖服务器状态，按顺序串起来刷新，避免读到上一轮的旧状态
+const refreshStatus = async () => {
+  await updateStatus()
+  updateClientStatus()
+  await updateServerClients()
+}
+
 onMounted(() => {
   loadConfig()
-  updateStatus()
-  updateClientStatus()
+  void refreshStatus()
   loadLogs()
 
   EventsOn('logs:updated', onLogsUpdated)
 
   const statusInterval = window.setInterval(() => {
-    updateStatus()
-    updateClientStatus()
+    void refreshStatus()
   }, 2000)
 
   onUnmounted(() => {
@@ -340,7 +370,7 @@ const toggleBand = () => {
 const bandSummary = computed(() => {
   if (mode.value === 'server') {
     return status.value.isRunning
-      ? `服务器运行中 · 端口 ${config.value.port} · 客户端 ${status.value.clientCount}`
+      ? `本机作为服务器 · 端口 ${config.value.port} · 已连接 ${status.value.clientCount} 台设备`
       : '服务器未启动'
   }
   return clientStatus.value.isConnected ? '已连接服务器' : '客户端未连接'
@@ -361,15 +391,19 @@ type Settings = {
   autoStartMode: AutoStartMode
   autoStartActionEnabled: boolean
   closeAction: 'tray' | 'close'
+  maxLogs: number
 }
 
 const SETTINGS_KEY = 'np:settings'
+
+const DEFAULT_MAX_LOGS = 500
 
 const settings = ref<Settings>({
   autoStartEnabled: false,
   autoStartMode: 'server',
   autoStartActionEnabled: false,
-  closeAction: 'tray'
+  closeAction: 'tray',
+  maxLogs: DEFAULT_MAX_LOGS
 })
 
 watchEffect(() => {
@@ -377,11 +411,13 @@ watchEffect(() => {
   if (!raw) return
   try {
     const obj = JSON.parse(raw) as Partial<Settings>
+    const maxLogs = Number(obj.maxLogs)
     settings.value = {
       autoStartEnabled: Boolean(obj.autoStartEnabled),
       autoStartMode: obj.autoStartMode === 'client' ? 'client' : 'server',
       autoStartActionEnabled: Boolean(obj.autoStartActionEnabled),
-      closeAction: obj.closeAction === 'close' ? 'close' : 'tray'
+      closeAction: obj.closeAction === 'close' ? 'close' : 'tray',
+      maxLogs: Number.isFinite(maxLogs) && maxLogs > 0 ? maxLogs : DEFAULT_MAX_LOGS
     }
   } catch {
     // ignore
@@ -467,7 +503,8 @@ watch(
       <div class="header">
         <div class="header-drag" />
         <div class="header-left">
-          <n-space align="center" :size="12">
+          <n-space align="center" :size="10">
+            <img class="brand-logo" :src="logoMark" alt="传笺 ChuanJian" />
             <n-text strong>NextPaste Server</n-text>
             <n-tag size="small" type="info" round>NPBP V1.1</n-tag>
           </n-space>
@@ -478,7 +515,21 @@ watch(
             <StatusIndicatorTag :is-running="hasActiveConnection" />
 
             <template v-if="mode === 'server' && status.isRunning">
-              <n-tag size="small" round type="success">客户端 {{ status.clientCount }}</n-tag>
+              <n-popover trigger="hover" placement="bottom">
+                <template #trigger>
+                  <n-tag size="small" round type="success" style="cursor: default">
+                    已连接 {{ status.clientCount }} 台设备
+                  </n-tag>
+                </template>
+                <div class="client-panel">
+                  <n-text strong style="font-size: 13px">本机作为服务器</n-text>
+                  <div v-if="!serverClients.length" class="client-empty">暂无设备连接</div>
+                  <div v-for="c in serverClients" :key="c.id" class="client-row">
+                    <span class="client-name">{{ c.deviceName || '未知设备' }}</span>
+                    <span class="client-meta">{{ c.platform || '未知平台' }} · {{ c.connTime }}</span>
+                  </div>
+                </div>
+              </n-popover>
             </template>
 
             <n-radio-group v-model:value="colorScheme" size="small" name="theme">
@@ -654,6 +705,40 @@ watch(
 .header-right {
   position: relative;
   z-index: 1;
+}
+
+.brand-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+  user-select: none;
+}
+
+.client-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.client-empty {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.client-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-name {
+  font-size: 13px;
+}
+
+.client-meta {
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 .page {

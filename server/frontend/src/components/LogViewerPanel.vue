@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
-// 内容原文与图片预览已移到第三列剪切板面板，日志表只留事件流水
+// 日志表列：级别 / 分类 / 剪贴板内容 / 时间；原文与图片详情仍在第三列剪切板面板
 type Level = 'ALL' | 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
 type Category = 'ALL' | 'clipboard' | 'connection' | 'system'
 
@@ -114,10 +114,15 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
     }
   },
   {
-    title: '内容',
-    key: 'message',
+    title: '剪贴板内容',
+    key: 'preview',
     render: (row) => {
-      return h(NEllipsis, { tooltip: true }, { default: () => row.message })
+      const preview = (row.preview ?? '').trim()
+      if (preview) {
+        return h(NEllipsis, { tooltip: true }, { default: () => preview })
+      }
+      // 非剪贴板记录没有内容预览，回退为事件描述，避免连接/系统日志整列空白
+      return h(NText, { depth: 3 }, { default: () => row.message })
     }
   },
   {

@@ -20,9 +20,13 @@ export function GetLocalIPs():Promise<Array<string>>;
 
 export function GetLogContent(arg1:number):Promise<Record<string, any>>;
 
+export function GetLogStorePath():Promise<string>;
+
 export function GetLogs():Promise<Array<main.LogEntry>>;
 
 export function GetMode():Promise<string>;
+
+export function GetServerClients():Promise<Array<Record<string, any>>>;
 
 export function GetServerStatus():Promise<Record<string, any>>;
 

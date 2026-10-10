@@ -38,12 +38,20 @@ export function GetLogContent(arg1) {
   return window['go']['main']['App']['GetLogContent'](arg1);
 }
 
+export function GetLogStorePath() {
+  return window['go']['main']['App']['GetLogStorePath']();
+}
+
 export function GetLogs() {
   return window['go']['main']['App']['GetLogs']();
 }
 
 export function GetMode() {
   return window['go']['main']['App']['GetMode']();
+}
+
+export function GetServerClients() {
+  return window['go']['main']['App']['GetServerClients']();
 }
 
 export function GetServerStatus() {

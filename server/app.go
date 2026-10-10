@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +37,16 @@ const (
 	maxStoredImageBytes = 20 * 1024 * 1024 // 图片超过 20MB 不暂存（日志仍正常记录）
 )
 
+// 本地记录条数限制（可在设置中调整，超出后按时间顺序删除最早的记录）
+const (
+	defaultMaxLogs = 500
+	minMaxLogs     = 50
+	maxMaxLogs     = 10000
+)
+
+// logSaveDelay 记录落盘的合并窗口（避免高频日志频繁写盘）
+const logSaveDelay = 800 * time.Millisecond
+
 // App struct（V1.1 二进制协议版本）
 type App struct {
 	ctx          context.Context
@@ -57,6 +68,12 @@ type App struct {
 
 	clip *clipLedger
 
+	// 记录本地持久化
+	logStorePath string
+	saveMu       sync.Mutex
+	saveTimer    *time.Timer
+	writeMu      sync.Mutex
+
 	launchFlags LaunchFlags
 	trayReady   atomic.Bool
 	quitting    atomic.Bool
@@ -69,7 +86,7 @@ func NewApp() *App {
 		wsClient:     ws.NewWSClient("NextPaste Desktop", "Windows"),
 		clipboardMon: clipboard.NewMonitor(),
 		logs:         make([]LogEntry, 0),
-		maxLogs:      500,
+		maxLogs:      defaultMaxLogs,
 		contents:     make(map[int64]storedContent),
 		clip:         newClipLedger(),
 		mode:         "server", // 默认为服务器模式
@@ -78,6 +95,7 @@ func NewApp() *App {
 			AutoStartActionEnabled: false,
 			AutoStartMode:          AutoStartModeServer,
 			CloseAction:            "tray",
+			MaxLogs:                defaultMaxLogs,
 		},
 		launchFlags: LaunchFlags{},
 	}
@@ -126,6 +144,18 @@ func (a *App) ApplySettings(settingsJSON string) error {
 	if s.CloseAction != "close" {
 		s.CloseAction = "tray"
 	}
+	// 记录条数：缺省（<=0）沿用当前值，越界收敛到允许区间
+	if s.MaxLogs <= 0 {
+		a.settingsMu.RLock()
+		s.MaxLogs = a.settings.MaxLogs
+		a.settingsMu.RUnlock()
+	}
+	if s.MaxLogs < minMaxLogs {
+		s.MaxLogs = minMaxLogs
+	}
+	if s.MaxLogs > maxMaxLogs {
+		s.MaxLogs = maxMaxLogs
+	}
 	// 关闭偏好必须先生效；开机自启写入失败不应让窗口行为退回默认值
 	a.settingsMu.Lock()
 	a.settings.CloseAction = s.CloseAction
@@ -141,6 +171,9 @@ func (a *App) ApplySettings(settingsJSON string) error {
 	a.settingsMu.Lock()
 	a.settings = s
 	a.settingsMu.Unlock()
+
+	// 记录上限即时生效：缩小上限时立刻裁剪并落盘
+	a.applyMaxLogs(s.MaxLogs)
 	return nil
 }
 
@@ -154,7 +187,13 @@ func (a *App) GetSettings() map[string]any {
 		"autoStartActionEnabled": a.settings.AutoStartActionEnabled,
 		"autoStartMode":          string(a.settings.AutoStartMode),
 		"closeAction":            a.settings.CloseAction,
+		"maxLogs":                a.settings.MaxLogs,
 	}
+}
+
+// GetLogStorePath 返回本地记录文件路径（设置面板展示“数据存在哪里”）
+func (a *App) GetLogStorePath() string {
+	return a.logStorePath
 }
 
 // GetAutostartStatus 查询 OS 级开机自启的真实注册状态（以系统为准，而非本地设置副本）
@@ -175,6 +214,7 @@ func (a *App) GetAutostartStatus() map[string]any {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.initLogStore()
 	trayReady := a.startTray()
 
 	// Settings live in localStorage on the frontend; backend stores the last applied copy.
@@ -210,6 +250,92 @@ func (a *App) shutdown(ctx context.Context) {
 	a.stopTray()
 	a.StopServer()
 	a.DisconnectClient()
+	// 退出前把待写记录落盘，避免丢最后一批日志
+	a.flushLogs()
+}
+
+// ============================================
+// 记录本地持久化
+// ============================================
+
+// initLogStore 解析本地记录文件路径并加载历史记录
+func (a *App) initLogStore() {
+	path, err := resolveLogStorePath()
+	if err != nil {
+		log.Printf("resolve log store path failed: %v", err)
+		return
+	}
+	a.logStorePath = path
+
+	logs, err := loadLogsFromDisk(path)
+	if err != nil {
+		log.Printf("load logs failed: %v", err)
+	}
+
+	a.logsMu.Lock()
+	a.logs = logs
+	if len(a.logs) > a.maxLogs {
+		a.logs = a.logs[:a.maxLogs]
+	}
+	snapshot := make([]LogEntry, len(a.logs))
+	copy(snapshot, a.logs)
+	a.logsMu.Unlock()
+
+	if a.ctx != nil && len(snapshot) > 0 {
+		runtime.EventsEmit(a.ctx, "logs:updated", snapshot)
+	}
+}
+
+// markLogsDirty 合并窗口内的高频日志，最多每 logSaveDelay 落盘一次
+func (a *App) markLogsDirty() {
+	a.saveMu.Lock()
+	defer a.saveMu.Unlock()
+	if a.saveTimer != nil {
+		return // 已有待写任务，本次合并进去
+	}
+	a.saveTimer = time.AfterFunc(logSaveDelay, func() {
+		a.saveMu.Lock()
+		a.saveTimer = nil
+		a.saveMu.Unlock()
+		a.flushLogs()
+	})
+}
+
+// flushLogs 立即把当前记录写入本地文件（原子写）
+func (a *App) flushLogs() {
+	path := a.logStorePath
+	if path == "" {
+		return
+	}
+
+	a.logsMu.RLock()
+	snapshot := make([]LogEntry, len(a.logs))
+	copy(snapshot, a.logs)
+	a.logsMu.RUnlock()
+
+	a.writeMu.Lock()
+	defer a.writeMu.Unlock()
+	if err := saveLogsToDisk(path, snapshot); err != nil {
+		log.Printf("save logs failed: %v", err)
+	}
+}
+
+// applyMaxLogs 更新记录上限并按序裁剪（超出部分删除最早的记录）
+func (a *App) applyMaxLogs(n int) {
+	a.logsMu.Lock()
+	a.maxLogs = n
+	trimmed := len(a.logs) > n
+	if trimmed {
+		a.logs = a.logs[:n]
+	}
+	snapshot := make([]LogEntry, len(a.logs))
+	copy(snapshot, a.logs)
+	a.logsMu.Unlock()
+
+	if trimmed && a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "logs:updated", snapshot)
+	}
+	a.markLogsDirty()
 }
 
 // StartServer 启动 WebSocket 服务器
@@ -297,6 +423,11 @@ func (a *App) GetServerStatus() map[string]any {
 	}
 }
 
+// GetServerClients 获取已连接设备列表（服务器模式下“本机作为服务器”的设备明细）
+func (a *App) GetServerClients() []map[string]any {
+	return a.wsServer.GetClients()
+}
+
 // GetMode 获取当前模式
 func (a *App) GetMode() string {
 	return a.mode
@@ -321,9 +452,15 @@ func (a *App) GetLogs() []LogEntry {
 // ClearLogs 清空日志
 func (a *App) ClearLogs() {
 	a.logsMu.Lock()
-	defer a.logsMu.Unlock()
 	a.logs = make([]LogEntry, 0)
-	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
+	empty := a.logs
+	a.logsMu.Unlock()
+
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "logs:updated", empty)
+	}
+	// 清空同样落盘，否则重启后旧记录会重新出现
+	a.flushLogs()
 }
 
 // storeContent 暂存剪贴板内容，返回内容 ID（不可暂存时返回 0）
@@ -433,6 +570,9 @@ func (a *App) onLogFull(e ws.LogEvent) {
 
 	// 发送事件到前端
 	runtime.EventsEmit(a.ctx, "logs:updated", a.logs)
+
+	// 本地落盘（合并窗口内只写一次）
+	a.markLogsDirty()
 }
 
 // onLog 日志回调（无预览，分类 system）
