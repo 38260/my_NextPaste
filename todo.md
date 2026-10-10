@@ -6,7 +6,7 @@
 
 - [x] T12.1 Windows 托盘生命周期：窗口关闭时隐藏主窗口并保持同步；托盘菜单可恢复窗口、完全退出；退出路径不被关闭钩子拦截。托盘未就绪及其他平台保留可恢复的任务栏最小化行为。验证：Windows `CGO_ENABLED=0` 下 go test / go build / go vet 通过。提交：`feat: 增加 Windows 托盘驻留与窗口恢复`。
 - [x] T12.2 前端窗口行为与文案：右上角关闭按钮走统一后台关闭逻辑；设置项从“最小化到任务栏”调整为“隐藏到系统托盘”，兼容既有设置值；启动时立即同步关闭偏好。README 同步修订。验证：go test、vue-tsc 与 vite build 通过。提交：`fix: 统一关闭按钮与托盘设置行为`。
-- [ ] T12.3 整体验证：Go 静态检查、测试与桌面构建，前端类型检查与构建，并按窗口关闭 / 托盘恢复 / 托盘退出 / 开机隐藏场景验收，记录结果后交付。
+- [x] T12.3 整体验证：`go test -count=1 ./...`、`go vet ./...`、`npm run build`（vue-tsc + Vite）通过；Windows `CGO_ENABLED=0` + `desktop,production` 构建通过，验收版位于 `server/build/bin/NextPaste-tray-acceptance.exe`。本机实测普通启动与 `-minimized` 启动：托盘窗口存在、菜单恢复主窗口、原生关闭后主窗口隐藏但进程继续、再次恢复、托盘退出后进程结束，全部通过。Linux / macOS 无 GUI 标签的交叉编译通过；两平台生产 GUI 标签需 Wails 自身的 CGO 环境，本轮未配置。已清理本轮临时工具和探针。提交：`docs: 记录托盘驻留整体验证与验收程序`。
 
 ## 15. 顶部配置布局优化（2026-10-10）
 
