@@ -18,13 +18,14 @@ import {
   StartServer,
   StopServer
 } from '../wailsjs/go/main/App'
-import type { LogEntry, ServerConfig as ServerConfigType, ServerStatus } from './types'
+import type { ClipItem, LogEntry, ServerConfig as ServerConfigType, ServerStatus } from './types'
 import { useDialog, useMessage } from 'naive-ui'
 
 import ServerConfigForm from './components/ServerConfigForm.vue'
 import ClientConfigForm from './components/ClientConfigForm.vue'
 import ConnectionInfoCard from './components/ConnectionInfoCard.vue'
 import LogViewerPanel from './components/LogViewerPanel.vue'
+import ClipboardContentPanel from './components/ClipboardContentPanel.vue'
 import StatusIndicatorTag from './components/StatusIndicatorTag.vue'
 import SettingsModal from './components/SettingsModal.vue'
 
@@ -273,7 +274,27 @@ const onWindowResize = () => {
   windowWidth.value = window.innerWidth
 }
 
-const compactMode = computed(() => windowWidth.value < 1100)
+// 第三列宽度：窗口越宽给得越多；日志表按剩余宽度决定是否切紧凑列宽
+const clipWidth = computed(() => {
+  if (windowWidth.value >= 1500) return 460
+  if (windowWidth.value >= 1200) return 400
+  return 340
+})
+
+const compactMode = computed(() => windowWidth.value - clipWidth.value < 760)
+
+// 剪切板条目 = clipboard 分类且后端暂存了原文的日志
+const clipItems = computed<ClipItem[]>(() =>
+  logs.value
+    .filter((l) => l.category === 'clipboard' && l.contentId)
+    .map((l) => ({
+      id: l.contentId as number,
+      kind: (l.preview && l.preview.startsWith('图片') ? 'image' : 'text') as 'text' | 'image',
+      caption: l.message,
+      preview: l.preview ?? '',
+      timestamp: l.timestamp
+    }))
+)
 
 // 顶部工作模式条：展开时含配置与连接信息，收起时只留模式切换
 const BAND_KEY = 'np:workBand'
@@ -540,7 +561,13 @@ watch(
       </div>
 
       <div class="page-body">
-        <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
+        <div class="body-log">
+          <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
+        </div>
+
+        <div class="body-clip" :style="{ width: clipWidth + 'px' }">
+          <ClipboardContentPanel :items="clipItems" />
+        </div>
       </div>
     </div>
 
@@ -629,7 +656,22 @@ watch(
 .page-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
   padding: 16px;
+  overflow: hidden;
+}
+
+.body-log {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+}
+
+.body-clip {
+  flex: 0 0 auto;
+  min-width: 260px;
+  height: 100%;
 }
 </style>

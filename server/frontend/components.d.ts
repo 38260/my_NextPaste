@@ -12,15 +12,13 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ClientConfigForm: typeof import('./src/components/ClientConfigForm.vue')['default']
+    ClipboardContentPanel: typeof import('./src/components/ClipboardContentPanel.vue')['default']
     ConnectionInfoCard: typeof import('./src/components/ConnectionInfoCard.vue')['default']
     LogViewerPanel: typeof import('./src/components/LogViewerPanel.vue')['default']
     NButton: typeof import('naive-ui')['NButton']
-    NCard: typeof import('naive-ui')['NCard']
     NIcon: typeof import('naive-ui')['NIcon']
     NLayout: typeof import('naive-ui')['NLayout']
-    NLayoutContent: typeof import('naive-ui')['NLayoutContent']
     NLayoutHeader: typeof import('naive-ui')['NLayoutHeader']
-    NLayoutSider: typeof import('naive-ui')['NLayoutSider']
     NRadioButton: typeof import('naive-ui')['NRadioButton']
     NRadioGroup: typeof import('naive-ui')['NRadioGroup']
     NSpace: typeof import('naive-ui')['NSpace']
