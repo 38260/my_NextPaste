@@ -4,6 +4,7 @@ package main
 
 import (
 	_ "embed"
+	"runtime"
 
 	"github.com/getlantern/systray"
 )
@@ -15,31 +16,36 @@ var trayIcon []byte
 func (a *App) startTray() <-chan struct{} {
 	ready := make(chan struct{})
 	done := make(chan struct{})
-	go systray.Run(func() {
-		systray.SetIcon(trayIcon)
-		systray.SetTooltip("传笺 · 后台同步")
-		show := systray.AddMenuItem("显示窗口", "恢复传笺主窗口")
-		systray.AddSeparator()
-		quit := systray.AddMenuItem("退出应用", "停止同步并退出传笺")
-		a.trayReady.Store(true)
-		close(ready)
+	go func() {
+		// 托盘窗口及消息循环必须始终位于同一系统线程。
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		systray.Run(func() {
+			systray.SetIcon(trayIcon)
+			systray.SetTooltip("传笺 · 后台同步")
+			show := systray.AddMenuItem("显示窗口", "恢复传笺主窗口")
+			systray.AddSeparator()
+			quit := systray.AddMenuItem("退出应用", "停止同步并退出传笺")
+			a.trayReady.Store(true)
+			close(ready)
 
-		go func() {
-			for {
-				select {
-				case <-show.ClickedCh:
-					a.ShowWindow()
-				case <-quit.ClickedCh:
-					a.Quit()
-				case <-done:
-					return
+			go func() {
+				for {
+					select {
+					case <-show.ClickedCh:
+						a.ShowWindow()
+					case <-quit.ClickedCh:
+						a.Quit()
+					case <-done:
+						return
+					}
 				}
-			}
-		}()
-	}, func() {
-		a.trayReady.Store(false)
-		close(done)
-	})
+			}()
+		}, func() {
+			a.trayReady.Store(false)
+			close(done)
+		})
+	}()
 	return ready
 }
 
