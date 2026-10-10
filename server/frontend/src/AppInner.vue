@@ -536,25 +536,38 @@ watch(
 
     <div class="page">
       <div class="work-band">
-        <div class="band-mode">
-          <n-text depth="3" class="band-label">工作模式</n-text>
-          <n-tabs
-            type="segment"
-            :value="mode"
-            :disabled="hasActiveConnection"
-            style="width: 180px"
-            @update:value="(v: string | number) => switchMode(v as any)"
+        <div class="band-toolbar">
+          <div class="band-mode">
+            <n-text depth="3" class="band-label">工作模式</n-text>
+            <n-tabs
+              type="segment"
+              :value="mode"
+              :disabled="hasActiveConnection"
+              class="band-tabs"
+              @update:value="(v: string | number) => switchMode(v as any)"
+            >
+              <n-tab name="server">服务器</n-tab>
+              <n-tab name="client">客户端</n-tab>
+            </n-tabs>
+          </div>
+
+          <div class="band-summary">
+            <n-text depth="3">{{ bandSummary }}</n-text>
+          </div>
+
+          <n-button
+            class="band-toggle"
+            size="small"
+            quaternary
+            :aria-expanded="!bandCollapsed"
+            aria-controls="work-band-details"
+            @click="toggleBand"
           >
-            <n-tab name="server">服务器</n-tab>
-            <n-tab name="client">客户端</n-tab>
-          </n-tabs>
+            {{ bandCollapsed ? '展开配置' : '收起配置' }}
+          </n-button>
         </div>
 
-        <div v-if="bandCollapsed" class="band-summary">
-          <n-text depth="3">{{ bandSummary }}</n-text>
-        </div>
-
-        <template v-else>
+        <div v-if="!bandCollapsed" id="work-band-details" class="band-details">
           <div class="band-config">
             <ServerConfigForm
               v-if="mode === 'server'"
@@ -578,18 +591,14 @@ watch(
           <ConnectionInfoCard
             v-if="mode === 'server' || (mode === 'client' && clientStatus.isConnected)"
             class="band-conn"
-            :list-max-height="150"
+            compact
+            :list-max-height="112"
             :is-running="hasActiveConnection"
-            :client-count="status.clientCount"
             :port="config.port"
             :mode="mode"
             :server-url="clientUrl"
           />
-        </template>
-
-        <n-button class="band-toggle" size="small" quaternary @click="toggleBand">
-          {{ bandCollapsed ? '展开配置' : '收起配置' }}
-        </n-button>
+        </div>
       </div>
 
       <div class="page-body">
@@ -650,46 +659,80 @@ watch(
 }
 
 .work-band {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 16px 12px;
   border-bottom: 1px solid rgba(128, 128, 128, 0.24);
+}
+
+.band-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 34px;
 }
 
 .band-mode {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.band-tabs {
+  width: 180px;
 }
 
 .band-label {
   font-size: 12px;
-  line-height: 1;
+  white-space: nowrap;
 }
 
-.band-config {
-  flex: 0 1 320px;
-  min-width: 260px;
+.band-details {
+  display: grid;
+  grid-template-columns: minmax(380px, 0.95fr) minmax(0, 1.05fr);
+  align-items: start;
+  gap: 12px;
+  margin-top: 10px;
 }
 
+.band-config,
 .band-conn {
-  flex: 1 1 360px;
-  min-width: 300px;
+  min-width: 0;
+}
+
+.band-details :deep(.n-card-header) {
+  padding: 12px 16px 8px;
+  font-size: 14px;
+}
+
+.band-details :deep(.n-card__content) {
+  padding: 0 16px 12px;
 }
 
 .band-summary {
-  flex: 1 1 auto;
-  align-self: center;
+  min-width: 0;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .band-toggle {
   margin-left: auto;
-  align-self: flex-start;
-  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 860px) {
+  .band-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .band-toolbar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .band-summary {
+    order: 1;
+    flex-basis: 100%;
+  }
 }
 
 .page-body {

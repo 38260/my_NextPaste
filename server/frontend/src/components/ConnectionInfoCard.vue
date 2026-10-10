@@ -25,13 +25,15 @@ interface Props {
   mode?: 'server' | 'client'
   serverUrl?: string
   listMaxHeight?: number
+  compact?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'server',
   serverUrl: '',
   port: 8080,
-  listMaxHeight: 220
+  listMaxHeight: 220,
+  compact: false
 })
 
 const message = useMessage()
@@ -160,7 +162,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <n-card size="small" :title="title">
+  <n-card size="small" :title="title" :class="{ 'connection-compact': compact }">
     <template v-if="mode === 'server'" #header-extra>
       <n-checkbox v-model:checked="onlyPinned" size="small">
         <n-text depth="3" style="font-size: 12px">仅显示固定地址</n-text>
@@ -176,16 +178,16 @@ onMounted(() => {
     </template>
 
     <template v-else>
-      <n-space vertical :size="12">
+      <n-space vertical :size="compact ? 8 : 12">
         <div>
-          <n-text depth="3">{{ mode === 'client' ? '服务器地址' : '可用连接地址' }}</n-text>
+          <n-text depth="3" :style="compact ? 'font-size: 12px' : undefined">{{ mode === 'client' ? '当前连接地址' : '可用连接地址' }}</n-text>
         </div>
 
         <n-scrollbar :style="`max-height: ${listMaxHeight}px`">
           <n-list v-if="displayAddresses.length" bordered>
             <n-list-item v-for="item in displayAddresses" :key="item.addr">
-              <n-space align="center" justify="space-between" style="width: 100%">
-                <div style="min-width: 0">
+              <div class="address-row">
+                <div class="address-value">
                   <span class="addr-text" :style="item.online ? '' : 'opacity: 0.4'">
                     {{ item.addr }}
                   </span>
@@ -193,12 +195,13 @@ onMounted(() => {
                     <n-text depth="3" style="font-size: 12px">当前网络不在此网段</n-text>
                   </div>
                 </div>
-                <n-space :size="6">
+                <n-space :size="4" class="address-actions" :wrap="false">
                   <n-tooltip v-if="mode === 'server'" trigger="hover">
                     <template #trigger>
                       <n-button
                         size="tiny"
                         quaternary
+                        :aria-label="item.pinned ? '取消固定地址' : '固定地址'"
                         :type="item.pinned ? 'primary' : 'default'"
                         @click="togglePin(item.addr)"
                       >
@@ -212,7 +215,7 @@ onMounted(() => {
 
                   <n-tooltip trigger="hover">
                     <template #trigger>
-                      <n-button size="tiny" quaternary @click="showQrCode(item.addr)">
+                      <n-button size="tiny" quaternary aria-label="显示连接二维码" @click="showQrCode(item.addr)">
                         <template #icon>
                           <n-icon><ScanOutline /></n-icon>
                         </template>
@@ -223,7 +226,7 @@ onMounted(() => {
 
                   <n-tooltip trigger="hover">
                     <template #trigger>
-                      <n-button size="tiny" quaternary type="primary" @click="copyAddress(item.addr)">
+                      <n-button size="tiny" quaternary type="primary" aria-label="复制连接地址" @click="copyAddress(item.addr)">
                         <template #icon>
                           <n-icon><CopyOutline /></n-icon>
                         </template>
@@ -232,7 +235,7 @@ onMounted(() => {
                     复制
                   </n-tooltip>
                 </n-space>
-              </n-space>
+              </div>
             </n-list-item>
           </n-list>
 
@@ -254,6 +257,44 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.address-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.address-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.address-actions {
+  flex-shrink: 0;
+}
+
+.connection-compact :deep(.n-list-item) {
+  padding: 6px 10px;
+}
+
+.connection-compact :deep(.n-empty) {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+}
+
+.connection-compact :deep(.n-empty__icon) {
+  margin: 0;
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+}
+
+.connection-compact :deep(.n-empty__description) {
+  margin: 0;
+}
+
 /* n-code 需要额外配置 hljs，未配置时地址文字根本不渲染，这里改为自带样式的等宽文本 */
 .addr-text {
   display: inline-block;

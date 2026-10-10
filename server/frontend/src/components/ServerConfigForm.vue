@@ -56,26 +56,26 @@ const handleStop = () => {
 <template>
   <n-card size="small" title="服务器配置">
     <div class="config-row">
-    <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isRunning">
-      <n-form-item label="监听地址">
-        <n-input v-model:value="localConfig.address" placeholder="0.0.0.0" />
-      </n-form-item>
+      <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isRunning">
+        <n-form-item label="监听地址">
+          <n-input v-model:value="localConfig.address" placeholder="0.0.0.0" />
+        </n-form-item>
 
-      <n-form-item label="端口号">
-        <n-input-number v-model:value="localConfig.port" :min="1" :max="65535" style="width: 100%" />
-      </n-form-item>
-    </n-form>
+        <n-form-item label="端口号">
+          <n-input-number v-model:value="localConfig.port" :min="1" :max="65535" style="width: 100%" />
+        </n-form-item>
+      </n-form>
 
-    <n-button
-      v-if="!isRunning"
-      type="primary"
-      class="config-action"
-      :disabled="!isValid"
-      @click="handleStart"
-    >
-      启动服务
-    </n-button>
-    <n-button v-else type="error" class="config-action" @click="handleStop">停止服务</n-button>
+      <n-button
+        v-if="!isRunning"
+        type="primary"
+        class="config-action"
+        :disabled="!isValid"
+        @click="handleStart"
+      >
+        启动服务
+      </n-button>
+      <n-button v-else type="error" class="config-action" @click="handleStop">停止服务</n-button>
     </div>
   </n-card>
 </template>
@@ -106,6 +106,5 @@ const handleStop = () => {
   .config-fields {
     grid-template-columns: minmax(0, 1fr) 110px;
   }
-
 }
 </style>

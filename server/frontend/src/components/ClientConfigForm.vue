@@ -118,22 +118,22 @@ const handleRemoveTemplate = (tpl: ConnTemplate) => {
 <template>
   <n-card size="small" title="客户端配置">
     <div class="config-row">
-    <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isConnected">
-      <n-form-item label="服务器地址">
-        <n-input v-model:value="localUrl" placeholder="ws://server:8080/ws" />
-      </n-form-item>
-    </n-form>
+      <n-form class="config-fields" label-placement="top" :show-feedback="false" :disabled="isConnected">
+        <n-form-item label="服务器地址">
+          <n-input v-model:value="localUrl" placeholder="ws://server:8080/ws" />
+        </n-form-item>
+      </n-form>
 
-    <n-button
-      v-if="!isConnected"
-      type="primary"
-      class="config-action"
-      :disabled="!isValid"
-      @click="handleConnect"
-    >
-      连接服务器
-    </n-button>
-    <n-button v-else type="error" class="config-action" @click="handleDisconnect">断开连接</n-button>
+      <n-button
+        v-if="!isConnected"
+        type="primary"
+        class="config-action"
+        :disabled="!isValid"
+        @click="handleConnect"
+      >
+        连接服务器
+      </n-button>
+      <n-button v-else type="error" class="config-action" @click="handleDisconnect">断开连接</n-button>
     </div>
 
     <n-space v-if="templates.length" vertical :size="6" style="margin-top: 16px">
