@@ -6,6 +6,7 @@ import {
   NEllipsis,
   NEmpty,
   NIcon,
+  NImage,
   NInputNumber,
   NPopover,
   NScrollbar,
@@ -89,13 +90,21 @@ const toggleOne = (id: number) => {
 
 // 内容按需拉取：隐藏态不取原文，避免无谓的 base64 常驻内存
 const texts = ref<Record<number, string>>({})
-const images = ref<Record<number, string>>({})
+const pics = ref<Record<number, { url: string; bytes: number; w: number; h: number }>>({})
 const pending = new Set<number>()
+
+const measure = (url: string) =>
+  new Promise<{ w: number; h: number }>((resolve) => {
+    const probe = new Image()
+    probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight })
+    probe.onerror = () => resolve({ w: 0, h: 0 })
+    probe.src = url
+  })
 
 const load = (item: ClipItem) => {
   if (pending.has(item.id)) return
   if (item.kind === 'text' && texts.value[item.id] !== undefined) return
-  if (item.kind === 'image' && images.value[item.id]) return
+  if (item.kind === 'image' && pics.value[item.id]) return
 
   pending.add(item.id)
   GetLogContent(item.id)
@@ -104,10 +113,15 @@ const load = (item: ClipItem) => {
       if (res.type === 'text') {
         texts.value = { ...texts.value, [item.id]: res.text ?? '' }
       } else if (res.type === 'image' && res.imageBase64) {
-        images.value = {
-          ...images.value,
-          [item.id]: `data:image/png;base64,${res.imageBase64}`
+        const url = `data:image/png;base64,${res.imageBase64}`
+        pics.value = {
+          ...pics.value,
+          [item.id]: { url, bytes: Number(res.size) || 0, w: 0, h: 0 }
         }
+        measure(url).then(({ w, h }) => {
+          const cur = pics.value[item.id]
+          if (cur) pics.value = { ...pics.value, [item.id]: { ...cur, w, h } }
+        })
       }
     })
     .catch(() => {})
@@ -131,6 +145,14 @@ const copy = async (item: ClipItem) => {
   } catch (error) {
     message.error(`复制失败：${String(error)}`)
   }
+}
+
+// 图片放大预览交给 n-image 自带能力（滚轮缩放 / 拖拽平移 / 旋转 / Esc 关闭）
+const fmtBytes = (n: number) => {
+  if (!n) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
 const fmtTime = (ts: number) => {
@@ -232,13 +254,21 @@ const fmtTime = (ts: number) => {
           <div v-if="item.kind === 'text'" class="clip-text" :style="textStyle">
             {{ texts[item.id] ?? '加载中…' }}
           </div>
-          <img
-            v-else-if="images[item.id]"
-            :src="images[item.id]"
-            class="clip-img"
-            :style="imgStyle"
-            alt=""
-          />
+          <template v-else-if="pics[item.id]">
+            <n-image
+              :src="pics[item.id].url"
+              :width="sizes.imgW"
+              :height="sizes.imgH"
+              object-fit="contain"
+              :img-props="{ style: { maxWidth: '100%' }, alt: '剪切板图片' }"
+              class="clip-img"
+            />
+            <div class="clip-dim">
+              {{ pics[item.id].w }} × {{ pics[item.id].h }} px
+              <template v-if="pics[item.id].bytes"> · {{ fmtBytes(pics[item.id].bytes) }}</template>
+              · 点击可放大
+            </div>
+          </template>
           <div v-else class="clip-mask" :style="imgStyle">
             <n-icon><LockClosedOutline /></n-icon>
             <span>加载中…</span>
@@ -330,11 +360,22 @@ const fmtTime = (ts: number) => {
 .clip-img {
   margin-top: 6px;
   display: block;
+  line-height: 0;
+}
+
+.clip-img :deep(img) {
   border-radius: 6px;
   object-fit: contain;
   background: rgba(128, 128, 128, 0.1);
-  box-sizing: border-box;
   max-width: 100%;
+  cursor: zoom-in;
+}
+
+.clip-dim {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.65;
 }
 
 .size-form {
