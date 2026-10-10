@@ -13,7 +13,6 @@ declare module 'vue' {
   export interface GlobalComponents {
     ClientConfigForm: typeof import('./src/components/ClientConfigForm.vue')['default']
     ClipboardContentCell: typeof import('./src/components/ClipboardContentCell.vue')['default']
-    ClipboardContentPanel: typeof import('./src/components/ClipboardContentPanel.vue')['default']
     ConnectionInfoCard: typeof import('./src/components/ConnectionInfoCard.vue')['default']
     LogViewerPanel: typeof import('./src/components/LogViewerPanel.vue')['default']
     NButton: typeof import('naive-ui')['NButton']

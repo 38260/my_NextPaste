@@ -21,25 +21,17 @@ import {
   StartServer,
   StopServer
 } from '../wailsjs/go/main/App'
-import type { ClipItem, LogEntry, ServerConfig as ServerConfigType, ServerStatus } from './types'
+import type { LogEntry, ServerConfig as ServerConfigType, ServerStatus } from './types'
 import { useDialog, useMessage } from 'naive-ui'
 
 import ServerConfigForm from './components/ServerConfigForm.vue'
 import ClientConfigForm from './components/ClientConfigForm.vue'
 import ConnectionInfoCard from './components/ConnectionInfoCard.vue'
 import LogViewerPanel from './components/LogViewerPanel.vue'
-import ClipboardContentPanel from './components/ClipboardContentPanel.vue'
 import StatusIndicatorTag from './components/StatusIndicatorTag.vue'
 import SettingsModal from './components/SettingsModal.vue'
 
 import logoMark from './assets/images/logo-mark.png'
-
-import {
-  DEFAULT_PANEL_WIDTH,
-  clampPanelWidth,
-  loadPanelWidth,
-  savePanelWidth
-} from './utils/clipLayout'
 
 import {
   CopyOutline,
@@ -312,52 +304,7 @@ const onWindowResize = () => {
   windowWidth.value = window.innerWidth
 }
 
-// 第三列宽度：用户可拖动调节并持久化；未调过时按窗口宽度给默认值
-const clipWidth = ref(loadPanelWidth())
-
-const effClipWidth = computed(() =>
-  Math.min(clipWidth.value, Math.max(260, windowWidth.value - 660))
-)
-
-const compactMode = computed(() => windowWidth.value - effClipWidth.value < 760)
-
-const clipDragging = ref(false)
-
-const onClipDragMove = (e: MouseEvent) => {
-  if (!clipDragging.value) return
-  clipWidth.value = clampPanelWidth(window.innerWidth - 16 - e.clientX)
-}
-
-const stopClipDrag = () => {
-  clipDragging.value = false
-  savePanelWidth(clipWidth.value)
-  window.removeEventListener('mousemove', onClipDragMove)
-  window.removeEventListener('mouseup', stopClipDrag)
-}
-
-const startClipDrag = () => {
-  clipDragging.value = true
-  window.addEventListener('mousemove', onClipDragMove)
-  window.addEventListener('mouseup', stopClipDrag)
-}
-
-const resetClipWidth = () => {
-  clipWidth.value = DEFAULT_PANEL_WIDTH
-  savePanelWidth(DEFAULT_PANEL_WIDTH)
-}
-
-// 剪切板条目 = clipboard 分类且后端暂存了原文的日志
-const clipItems = computed<ClipItem[]>(() =>
-  logs.value
-    .filter((l) => l.category === 'clipboard' && l.contentId)
-    .map((l) => ({
-      id: l.contentId as number,
-      kind: (l.preview && l.preview.startsWith('图片') ? 'image' : 'text') as 'text' | 'image',
-      caption: l.message,
-      preview: l.preview ?? '',
-      timestamp: l.timestamp
-    }))
-)
+const compactMode = computed(() => windowWidth.value < 1100)
 
 // 顶部工作模式条：展开时含配置与连接信息，收起时只留模式切换
 const BAND_KEY = 'np:workBand'
@@ -672,17 +619,6 @@ watch(
         <div class="body-log">
           <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
         </div>
-
-        <div class="body-clip" :style="{ width: effClipWidth + 'px' }">
-          <div
-            class="clip-resizer"
-            :class="{ 'is-active': clipDragging }"
-            title="拖动调节宽度，双击恢复默认"
-            @mousedown.prevent="startClipDrag"
-            @dblclick="resetClipWidth"
-          />
-          <ClipboardContentPanel :items="clipItems" />
-        </div>
       </div>
     </div>
 
@@ -852,27 +788,4 @@ watch(
   overflow: auto;
 }
 
-.body-clip {
-  flex: 0 0 auto;
-  min-width: 260px;
-  height: 100%;
-  position: relative;
-}
-
-.clip-resizer {
-  position: absolute;
-  left: -10px;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  cursor: col-resize;
-  border-radius: 4px;
-  background: transparent;
-  z-index: 2;
-}
-
-.clip-resizer:hover,
-.clip-resizer.is-active {
-  background: rgba(24, 160, 88, 0.35);
-}
 </style>

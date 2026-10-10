@@ -161,6 +161,9 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
           onToggle: () => toggleOne(row.contentId!)
         })
       }
+      const content = row.category === 'clipboard' && row.preview
+        ? revealAll.value ? row.preview : '内容已隐藏'
+        : row.message
       return h(NEllipsis, {
         tooltip: {
           contentStyle: {
@@ -171,7 +174,7 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
             overflowWrap: 'anywhere'
           }
         }
-      }, { default: () => row.preview || row.message })
+      }, { default: () => content })
     }
   },
   {
