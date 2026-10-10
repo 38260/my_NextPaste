@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<Emits>()
 
-// 日志表列：级别 / 分类 / 剪贴板内容 / 时间；原文与图片详情仍在第三列剪切板面板
+// 日志只显示收发事件，正文与图片统一在右侧内容面板展示。
 type Level = 'ALL' | 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR'
 type Category = 'ALL' | 'clipboard' | 'connection' | 'system'
 
@@ -114,15 +114,20 @@ const columns = computed<DataTableColumns<LogEntry>>(() => [
     }
   },
   {
-    title: '剪贴板内容',
-    key: 'preview',
+    title: '事件',
+    key: 'message',
     render: (row) => {
-      const preview = (row.preview ?? '').trim()
-      if (preview) {
-        return h(NEllipsis, { tooltip: true }, { default: () => preview })
-      }
-      // 非剪贴板记录没有内容预览，回退为事件描述，避免连接/系统日志整列空白
-      return h(NText, { depth: 3 }, { default: () => row.message })
+      return h(NEllipsis, {
+        tooltip: {
+          contentStyle: {
+            maxWidth: 'min(480px, calc(100vw - 32px))',
+            maxHeight: 'min(320px, calc(100vh - 32px))',
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'anywhere'
+          }
+        }
+      }, { default: () => row.message })
     }
   },
   {
