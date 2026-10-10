@@ -149,11 +149,12 @@ const handleQuitApp = async () => {
               :min="50"
               :max="10000"
               :step="50"
+              :precision="0"
               size="small"
               style="width: 160px"
             />
             <div style="margin-top: 4px; font-size: 12px">
-              <n-text depth="3">记录保存在本机，超出数量后按时间顺序删除最早的记录</n-text>
+              <n-text depth="3">全文和图片保存在项目目录，超出数量后删除最早的记录及其内容</n-text>
             </div>
           </div>
         </n-form-item>

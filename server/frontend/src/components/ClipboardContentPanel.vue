@@ -91,6 +91,7 @@ const toggleOne = (id: number) => {
 // 内容按需拉取：隐藏态不取原文，避免无谓的 base64 常驻内存
 const texts = ref<Record<number, string>>({})
 const pics = ref<Record<number, { url: string; bytes: number; w: number; h: number }>>({})
+const errors = ref<Record<number, string>>({})
 const pending = new Set<number>()
 
 const measure = (url: string) =>
@@ -109,7 +110,12 @@ const load = (item: ClipItem) => {
   pending.add(item.id)
   GetLogContent(item.id)
     .then((res: any) => {
-      if (!res || !res.found) return
+      if (!props.items.some((current) => current.id === item.id)) return
+      if (!res || !res.found) {
+        errors.value[item.id] = res?.error || '内容不可用'
+        return
+      }
+      delete errors.value[item.id]
       if (res.type === 'text') {
         texts.value = { ...texts.value, [item.id]: res.text ?? '' }
       } else if (res.type === 'image' && res.imageBase64) {
@@ -124,13 +130,21 @@ const load = (item: ClipItem) => {
         })
       }
     })
-    .catch(() => {})
+    .catch(() => {
+      if (props.items.some((current) => current.id === item.id)) errors.value[item.id] = '读取内容失败，请重试'
+    })
     .finally(() => pending.delete(item.id))
 }
 
 watch(
   () => [props.items, revealAll.value, overrides.value],
   () => {
+    const retained = new Set(props.items.map((item) => item.id))
+    for (const cache of [texts.value, pics.value, overrides.value, errors.value]) {
+      for (const id of Object.keys(cache)) {
+        if (!retained.has(Number(id))) delete cache[Number(id)]
+      }
+    }
     props.items.forEach((item) => {
       if (isShown(item.id)) load(item)
     })
@@ -251,7 +265,10 @@ const fmtTime = (ts: number) => {
         </div>
 
         <template v-else>
-          <div v-if="item.kind === 'text'" class="clip-text" :style="textStyle">
+          <div v-if="errors[item.id]" class="clip-mask" :style="item.kind === 'image' ? imgStyle : textStyle">
+            {{ errors[item.id] }}
+          </div>
+          <div v-else-if="item.kind === 'text'" class="clip-text" :style="textStyle">
             {{ texts[item.id] ?? '加载中…' }}
           </div>
           <template v-else-if="pics[item.id]">

@@ -15,6 +15,7 @@ import {
   GetLogs,
   GetServerClients,
   GetServerStatus,
+  GetSettings,
   HideWindow,
   Quit,
   StartServer,
@@ -212,8 +213,8 @@ const handleClearLogs = async () => {
     await ClearLogs()
     logs.value = []
     message.success('已清空日志')
-  } catch {
-    // ignore
+  } catch (error) {
+    message.error(`清空记录失败：${String(error)}`)
   }
 }
 
@@ -397,6 +398,7 @@ type Settings = {
 const SETTINGS_KEY = 'np:settings'
 
 const DEFAULT_MAX_LOGS = 500
+let hasSavedMaxLogs = false
 
 const settings = ref<Settings>({
   autoStartEnabled: false,
@@ -412,21 +414,28 @@ watchEffect(() => {
   try {
     const obj = JSON.parse(raw) as Partial<Settings>
     const maxLogs = Number(obj.maxLogs)
+    hasSavedMaxLogs = Number.isFinite(maxLogs) && maxLogs > 0
     settings.value = {
       autoStartEnabled: Boolean(obj.autoStartEnabled),
       autoStartMode: obj.autoStartMode === 'client' ? 'client' : 'server',
       autoStartActionEnabled: Boolean(obj.autoStartActionEnabled),
       closeAction: obj.closeAction === 'close' ? 'close' : 'tray',
-      maxLogs: Number.isFinite(maxLogs) && maxLogs > 0 ? maxLogs : DEFAULT_MAX_LOGS
+      maxLogs: hasSavedMaxLogs ? Math.min(10000, Math.max(50, Math.trunc(maxLogs))) : DEFAULT_MAX_LOGS
     }
   } catch {
     // ignore
   }
 })
 
+// 没有本机前端设置时沿用记录文件中的数量，避免新 WebView 将历史上限重置为 500。
+const settingsReady = GetSettings().then((stored) => {
+  if (!hasSavedMaxLogs) settings.value.maxLogs = Number(stored.maxLogs) || DEFAULT_MAX_LOGS
+})
+
 const didAutoAction = ref(false)
 
 onMounted(async () => {
+  await settingsReady.catch(() => {})
   if (didAutoAction.value) return
   if (!settings.value.autoStartActionEnabled) return
 
@@ -481,9 +490,11 @@ watch(
     window.clearTimeout(applySettingsTimer)
     const apply = async () => {
       try {
+        await settingsReady
+        if (!Number.isInteger(settings.value.maxLogs)) return
         await ApplySettings(JSON.stringify(settings.value))
       } catch (error) {
-        message.error(`开机自启设置未生效：${String(error)}`)
+        message.error(`设置保存失败：${String(error)}`)
         await refreshAutostartStatus()
       }
     }
