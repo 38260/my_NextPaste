@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/logo-256.png" width="150" alt="传笺 ChuanJian Logo" />
+  <img src="docs/assets/logo-brand.png" width="240" alt="传笺 ChuanJian Logo" />
   <h1>传笺 · ChuanJian</h1>
   <p><strong>让文字与图像在不同设备之间自由流转的跨设备剪贴板同步工具</strong></p>
   <p><em>让信息自由传递，让设备不再设限。</em></p>
