@@ -20,8 +20,8 @@ func setAutostart(enabled bool, mode AutoStartMode) error {
 	}
 
 	app := &autostart.App{
-		Name:        "NextPaste",
-		DisplayName: "NextPaste Sync Tool",
+		Name:        "ChuanJian",
+		DisplayName: "传笺 桌面端",
 		Exec:        []string{execPath, "-minimized", "-autostart=" + string(mode)},
 	}
 

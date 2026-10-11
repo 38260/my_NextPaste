@@ -1,6 +1,6 @@
-# NextPaste Server
+# 传笺 桌面端（ChuanJian Desktop）
 
-NextPaste 的 PC 服务端应用，基于 Wails 框架开发，提供 WebSocket 服务器和剪贴板监听功能。
+传笺（ChuanJian）的 PC 桌面端应用，基于 Wails 框架开发，提供 WebSocket 服务器和剪贴板监听功能。
 
 ## 功能特性
 
@@ -102,7 +102,7 @@ wails build
 
 ```powershell
 # 以管理员身份运行
-netsh advfirewall firewall add rule name="NextPaste Server" dir=in action=allow protocol=TCP localport=8080
+netsh advfirewall firewall add rule name="ChuanJian" dir=in action=allow protocol=TCP localport=8080
 ```
 
 ## 开发指南

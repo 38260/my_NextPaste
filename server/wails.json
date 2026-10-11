@@ -1,7 +1,14 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "NextPaste Server",
-  "outputfilename": "NextPaste Server",
+  "name": "传笺",
+  "outputfilename": "ChuanJian",
+  "Info": {
+    "companyName": "传笺 ChuanJian",
+    "productName": "传笺 ChuanJian",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2026 传笺 ChuanJian",
+    "comments": "让信息自由传递，让设备不再设限。"
+  },
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",

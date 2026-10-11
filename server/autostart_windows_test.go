@@ -25,6 +25,6 @@ func TestAutostartDevGuard(t *testing.T) {
 		t.Fatalf("查询自启状态不应报错: %v", err)
 	}
 	if enabled {
-		t.Log("注意：检测到已存在的 NextPaste 自启注册项（本测试未写入，应为环境遗留）")
+		t.Log("注意：检测到已存在的自启注册项（本测试未写入，应为环境遗留）")
 	}
 }

@@ -18,7 +18,7 @@ var (
 func main() {
 	// 解析命令行参数
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "NextPaste 中继服务器 - WebSocket 房间隔离中继服务\n\n")
+		fmt.Fprintf(os.Stderr, "传笺 中继服务器 - WebSocket 房间隔离中继服务\n\n")
 		fmt.Fprintf(os.Stderr, "用法:\n")
 		fmt.Fprintf(os.Stderr, "  %s [选项]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "选项:\n")
@@ -43,7 +43,7 @@ func main() {
 
 	// 启动服务器
 	addr := fmt.Sprintf("%s:%d", *host, *port)
-	log.Printf("🚀 NextPaste 中继服务器启动")
+	log.Printf("🚀 传笺 中继服务器启动")
 	log.Printf("📡 监听地址: %s", addr)
 	log.Printf("🔗 V1 连接 (旧版): ws://%s/ws/<roomID>", addr)
 	log.Printf("🔗 V2 连接 (推荐): ws://%s/v2/ws/<roomID>", addr)
@@ -77,7 +77,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>NextPaste 中继服务器</title>
+    <title>传笺 中继服务器</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
         h1 { color: #333; }
@@ -86,7 +86,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
     </style>
 </head>
 <body>
-    <h1>🚀 NextPaste 中继服务器</h1>
+    <h1>🚀 传笺 中继服务器</h1>
     <p>WebSocket 房间隔离中继服务正在运行</p>
     
     <div class="info">

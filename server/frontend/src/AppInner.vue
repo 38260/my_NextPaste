@@ -482,7 +482,7 @@ watch(
         <div class="header-left">
           <n-space align="center" :size="10">
             <img class="brand-logo" :src="logoMark" alt="传笺 ChuanJian" />
-            <n-text strong>NextPaste Server</n-text>
+            <n-text strong>传笺 桌面端</n-text>
             <n-tag size="small" type="info" round>NPBP V1.1</n-tag>
           </n-space>
         </div>

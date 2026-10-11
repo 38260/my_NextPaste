@@ -87,7 +87,7 @@ type App struct {
 func NewApp() *App {
 	return &App{
 		wsServer:     ws.NewServer(),
-		wsClient:     ws.NewWSClient("NextPaste Desktop", "Windows"),
+		wsClient:     ws.NewWSClient("传笺 桌面端", "Windows"),
 		clipboardMon: clipboard.NewMonitor(),
 		logs:         make([]LogEntry, 0),
 		maxLogs:      defaultMaxLogs,

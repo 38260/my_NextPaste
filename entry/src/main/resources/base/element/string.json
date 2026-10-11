@@ -10,7 +10,7 @@
     },
     {
       "name": "EntryAbility_label",
-      "value": "NextPaste"
+      "value": "传笺"
     },
     {
       "name": "reason_read_pasteboard",
@@ -22,7 +22,7 @@
     },
     {
       "name": "app_title",
-      "value": "NextPaste"
+      "value": "传笺"
     },
     {
       "name": "server_address_label",
@@ -210,7 +210,7 @@
     },
     {
       "name": "about_app_name",
-      "value": "NextPaste"
+      "value": "传笺"
     },
     {
       "name": "about_version",
@@ -230,7 +230,7 @@
     },
     {
       "name": "about_repo_url",
-      "value": "https://github.com/OSpark-Team/NextPaste"
+      "value": "https://github.com/38260/my_NextPaste"
     },
     {
       "name": "about_feedback_title",

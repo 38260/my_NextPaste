@@ -1,4 +1,4 @@
-# NextPaste 中继服务器
+# 传笺 中继服务器
 
 纯命令行的 WebSocket 中继服务器，支持房间隔离的剪贴板数据转发。
 
@@ -27,8 +27,8 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/OSpark-Team/NextPaste.git
-cd NextPaste/relay-server
+git clone https://github.com/38260/my_NextPaste.git
+cd my_NextPaste/relay-server
 
 # 下载依赖
 go mod download
@@ -90,7 +90,7 @@ ws://localhost:8080/v2/ws/my-room-123      (V2)
 ws://example.com:8080/ws/team-workspace    (V1)
 ```
 
-### 在 NextPaste 客户端中使用
+### 在传笺客户端中使用
 
 1. **HarmonyOS 客户端**：
    - 打开应用
@@ -144,7 +144,7 @@ ws://example.com:8080/ws/team-workspace    (V1)
 服务器会输出以下日志：
 
 ```
-🚀 NextPaste 中继服务器启动
+🚀 传笺 中继服务器启动
 📡 监听地址: 0.0.0.0:8080
 🔗 连接格式: ws://0.0.0.0:8080/ws/<roomID>
 💡 提示: 使用 Ctrl+C 停止服务器
@@ -175,7 +175,7 @@ ws://example.com:8080/ws/team-workspace    (V1)
 
 ```ini
 [Unit]
-Description=NextPaste Relay Server
+Description=ChuanJian Relay Server
 After=network.target
 
 [Service]
