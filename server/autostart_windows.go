@@ -98,21 +98,33 @@ func migrateLegacyAutostart() {
 	}
 	defer k.Close()
 
+	if err := migrateAutostartValues(k, execPath); err != nil {
+		log.Printf("migrate legacy autostart failed: %v", err)
+	}
+}
+
+func migrateAutostartValues(k registry.Key, execPath string) error {
 	legacy, _, err := k.GetStringValue(legacyAutostartValueName)
+	if errors.Is(err, registry.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
-		return // 无旧值，无需迁移
+		return fmt.Errorf("读取旧自启项失败: %w", err)
+	}
+	// 先确保新项存在，保留已设置的新配置；写入失败时旧项仍可供重试。
+	if _, _, err := k.GetStringValue(autostartValueName); errors.Is(err, registry.ErrNotExist) {
+		value := fmt.Sprintf(`"%s" -minimized -autostart=%s`, execPath, parseAutostartMode(legacy))
+		if err := k.SetStringValue(autostartValueName, value); err != nil {
+			return fmt.Errorf("写入新自启项失败: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("读取新自启项失败: %w", err)
 	}
 	if err := k.DeleteValue(legacyAutostartValueName); err != nil {
-		log.Printf("delete legacy autostart value failed: %v", err)
-		return
-	}
-	value := fmt.Sprintf(`"%s" -minimized -autostart=%s`, execPath, parseAutostartMode(legacy))
-	if err := k.SetStringValue(autostartValueName, value); err != nil {
-		// 新值写入失败时旧值已删：记录错误，用户可在设置或托盘菜单中重新开启
-		log.Printf("write migrated autostart value failed: %v", err)
-		return
+		return fmt.Errorf("删除旧自启项失败: %w", err)
 	}
 	log.Printf("migrated legacy autostart value %s -> %s", legacyAutostartValueName, autostartValueName)
+	return nil
 }
 
 // isDevBuild 判断是否运行在开发模式（wails dev）构建产物中：
