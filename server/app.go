@@ -74,6 +74,10 @@ type App struct {
 	launchFlags LaunchFlags
 	trayReady   atomic.Bool
 	quitting    atomic.Bool
+
+	// 托盘右键菜单当前展示的记录（弹出时重建，点击时按命令 ID 取回）
+	trayMenuMu      sync.Mutex
+	trayMenuRecords []trayRecord
 }
 
 // NewApp creates a new App application struct
@@ -119,6 +123,24 @@ func (a *App) HideWindow() {
 		return
 	}
 	runtime.WindowMinimise(a.ctx)
+}
+
+// showSettings 显示主窗口并打开设置面板（托盘菜单“打开设置”入口）
+func (a *App) showSettings() {
+	if a.ctx == nil {
+		return
+	}
+	a.ShowWindow()
+	runtime.EventsEmit(a.ctx, "settings:open")
+}
+
+// showRecord 显示主窗口并定位到指定剪贴板记录（托盘菜单点击记录）
+func (a *App) showRecord(id int64) {
+	if a.ctx == nil {
+		return
+	}
+	a.ShowWindow()
+	runtime.EventsEmit(a.ctx, "record:focus", id)
 }
 
 // Quit 完全退出应用
@@ -257,6 +279,50 @@ func (a *App) shutdown(ctx context.Context) {
 	a.DisconnectClient()
 	// 退出前把待写记录落盘，避免丢最后一批日志
 	a.flushLogs()
+}
+
+// ============================================
+// 托盘右键菜单：最近剪贴板记录
+// ============================================
+
+// trayRecord 托盘右键菜单中的最近剪贴板记录条目
+type trayRecord struct {
+	ID      int64  `json:"id"`      // 关联的暂存内容 ID
+	Label   string `json:"label"`   // 菜单标题（时间 + 摘要）
+	Tooltip string `json:"tooltip"` // 菜单悬停提示（时间 + 完整预览）
+}
+
+// trayRecentCount 托盘右键菜单展示的最近剪贴板记录条数
+const trayRecentCount = 3
+
+// trayMenuLabelLimit 菜单标题中预览摘要的最大长度（rune）
+const trayMenuLabelLimit = 32
+
+// recentClipRecords 返回最近 n 条剪贴板记录（最新在前），供托盘菜单展示
+func (a *App) recentClipRecords(n int) []trayRecord {
+	a.logsMu.RLock()
+	defer a.logsMu.RUnlock()
+
+	records := make([]trayRecord, 0, n)
+	for _, entry := range a.logs {
+		if entry.Category != "clipboard" || entry.ContentID == 0 {
+			continue
+		}
+		title := time.UnixMilli(entry.Timestamp).Format("15:04:05")
+		summary := []rune(entry.Preview)
+		if len(summary) > trayMenuLabelLimit {
+			summary = append(summary[:trayMenuLabelLimit:trayMenuLabelLimit], '…')
+		}
+		records = append(records, trayRecord{
+			ID:      entry.ContentID,
+			Label:   title + " · " + string(summary),
+			Tooltip: title + " · " + entry.Preview,
+		})
+		if len(records) >= n {
+			break
+		}
+	}
+	return records
 }
 
 // ============================================

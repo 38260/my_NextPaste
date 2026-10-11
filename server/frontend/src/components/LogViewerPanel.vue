@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, nextTick, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
@@ -22,6 +22,7 @@ import { DEFAULT_SIZES, SIZE_LIMITS, clampSize, loadSizes, saveSizes, type ClipS
 interface Props {
   logs: LogEntry[]
   compact?: boolean
+  focusId?: number | null
 }
 
 interface Emits {
@@ -76,6 +77,28 @@ const filteredLogs = computed(() => {
     if (filterLevel.value !== 'ALL' && l.level !== filterLevel.value) return false
     return true
   })
+})
+
+// 托盘菜单点击记录：保证目标行可见后滚动定位并短暂高亮
+const highlightId = ref<number | null>(null)
+let highlightTimer: number | undefined
+
+watch(() => props.focusId, async (id) => {
+  if (!id) return
+  if (!filteredLogs.value.some((l) => l.contentId === id)) {
+    filterCategory.value = 'clipboard'
+    filterLevel.value = 'ALL'
+  }
+  await nextTick()
+  document.querySelector(`tr[data-record-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  highlightId.value = id
+  window.clearTimeout(highlightTimer)
+  highlightTimer = window.setTimeout(() => { highlightId.value = null }, 2600)
+})
+
+const rowProps = (row: LogEntry) => ({
+  ...(row.contentId ? { 'data-record-id': String(row.contentId) } : {}),
+  ...(row.contentId && row.contentId === highlightId.value ? { class: 'record-highlight' } : {})
 })
 
 const formatTime = (timestamp: number) => {
@@ -240,6 +263,7 @@ const handleClear = () => emit('clear')
       size="small"
       :columns="columns"
       :data="filteredLogs"
+      :row-props="rowProps"
       :bordered="true"
       :single-line="false"
       :max-height="520"
@@ -255,4 +279,11 @@ const handleClear = () => emit('clear')
 .size-row :deep(.n-slider) { flex: 1; min-width: 0; }
 .size-row :deep(.n-input-number) { flex: 0 0 62px; }
 .log-panel :deep(.n-card-header) { flex-wrap: wrap; gap: 8px; }
+:deep(tr.record-highlight > td) {
+  animation: record-flash 2.4s ease;
+}
+@keyframes record-flash {
+  0%, 55% { background-color: rgba(24, 160, 120, 0.16); }
+  100% { background-color: transparent; }
+}
 </style>

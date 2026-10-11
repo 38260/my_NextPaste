@@ -283,6 +283,11 @@ onMounted(() => {
   EventsOn('settings:open', () => { settingsOpen.value = true })
   // 托盘左键恢复主界面时，收起上次遗留的设置面板
   EventsOn('window:restored', () => { settingsOpen.value = false })
+  // 托盘菜单点击最近记录：关闭设置面板并定位到日志表对应行
+  EventsOn('record:focus', (id: number) => {
+    settingsOpen.value = false
+    recordFocusId.value = id
+  })
 
   const statusInterval = window.setInterval(() => {
     void refreshStatus()
@@ -293,6 +298,7 @@ onMounted(() => {
     EventsOff('logs:updated')
     EventsOff('settings:open')
     EventsOff('window:restored')
+    EventsOff('record:focus')
   })
 })
 
@@ -302,6 +308,9 @@ const colorScheme = computed<ColorScheme>({
 })
 
 const settingsOpen = ref(false)
+
+// 托盘菜单点击的最近记录 ID（触发日志表滚动定位）
+const recordFocusId = ref<number | null>(null)
 
 // 响应式布局：窗口宽度驱动日志表列宽与顶部条形态
 const windowWidth = ref(window.innerWidth)
@@ -622,7 +631,7 @@ watch(
 
       <div class="page-body">
         <div class="body-log">
-          <LogViewerPanel :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
+          <LogViewerPanel :logs="logs" :compact="compactMode" :focus-id="recordFocusId" @clear="handleClearLogs" />
         </div>
       </div>
     </div>
