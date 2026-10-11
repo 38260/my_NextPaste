@@ -95,6 +95,13 @@ func TestTrayEvents(t *testing.T) {
 			t.Fatalf("post tray message: %v", err)
 		}
 	}
+	send := func(message, wParam, lParam uintptr) {
+		t.Helper()
+		var result uintptr
+		if ok, _, err := user32.NewProc("SendMessageTimeoutW").Call(tray, message, wParam, lParam, 0x0002, 5000, uintptr(unsafe.Pointer(&result))); ok == 0 {
+			t.Fatalf("send tray message: %v", err)
+		}
+	}
 	menuVisible := func() bool {
 		t.Helper()
 		visible := false
@@ -120,6 +127,26 @@ func TestTrayEvents(t *testing.T) {
 		}
 		t.Fatalf("menu visible = %v, want %v (%s)", !want, want, what)
 	}
+
+	// Explorer 的直接通知绕过消息队列，也必须进入应用处理。
+	send(wmTrayNotify, 100, wmLButtonUp)
+	waitClick(wmLButtonUp)
+	send(wmCommand, trayMenuSettings, 0)
+	if got := waitValue(commands, "sent settings command"); got != trayMenuSettings {
+		t.Fatalf("sent settings command = %#x", got)
+	}
+
+	// 直接右键通知进入原生菜单循环；关闭后发送方和接收方均正常返回。
+	sentRightDone := make(chan struct{}, 1)
+	go func() {
+		user32.NewProc("SendMessageW").Call(tray, wmTrayNotify, 100, wmRButtonUp)
+		sentRightDone <- struct{}{}
+	}()
+	waitMenu(true, "sent right click should open record menu")
+	post(wmCancelMode, 0, 0)
+	wait(rights, "sent tray menu closed")
+	wait(sentRightDone, "right click sender returned")
+	waitMenu(false, "sent menu cancelled")
 
 	// 重复调度与垃圾回收后，真实窗口队列仍须处理每次左键通知。
 	for i := 0; i < 25; i++ {

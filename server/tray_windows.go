@@ -149,7 +149,60 @@ func runTray(onReady, onExit func(), clicks chan<- uintptr, onRightClick func(hw
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	defer onExit()
-	systray.Register(onReady, nil)
+	systray.Register(nil, nil)
+
+	var trayWindow uintptr
+	trayUser32.NewProc("EnumThreadWindows").Call(uintptr(windows.GetCurrentThreadId()), windows.NewCallback(func(hwnd, _ uintptr) uintptr {
+		var name [64]uint16
+		trayUser32.NewProc("GetClassNameW").Call(hwnd, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
+		if windows.UTF16ToString(name[:]) == "SystrayClass" {
+			trayWindow = hwnd
+			return 0
+		}
+		return 1
+	}), 0)
+	if trayWindow == 0 {
+		log.Print("tray window not found on its message-loop thread")
+		systray.Quit()
+		return
+	}
+	controls := windows.NewLazySystemDLL("comctl32.dll")
+	defSubclass := controls.NewProc("DefSubclassProc")
+	removeSubclass := controls.NewProc("RemoveWindowSubclass")
+	var callback uintptr
+	callback = windows.NewCallback(func(hwnd uintptr, message uint32, wParam, lParam, _id, _data uintptr) uintptr {
+		// Explorer 的直接通知和队列通知都经过窗口过程，不能只在 GetMessage 后拦截。
+		if message == wmTrayNotify {
+			switch lParam {
+			case wmLButtonUp:
+				select {
+				case clicks <- lParam:
+				default:
+				}
+				return 0
+			case wmRButtonUp:
+				if onRightClick != nil {
+					onRightClick(hwnd)
+				}
+				return 0
+			}
+		}
+		if message == wmCommand && onCommand != nil && wParam&0xFFFF >= trayMenuRecordBase {
+			onCommand(wParam & 0xFFFF)
+			return 0
+		}
+		if message == 0x0082 { // WM_NCDESTROY
+			removeSubclass.Call(hwnd, callback, 1)
+		}
+		result, _, _ := defSubclass.Call(hwnd, uintptr(message), wParam, lParam)
+		return result
+	})
+	if ok, _, err := controls.NewProc("SetWindowSubclass").Call(trayWindow, callback, 1, 0); ok == 0 {
+		log.Printf("install tray window callback failed: %v", err)
+		systray.Quit()
+		return
+	}
+	onReady()
 
 	getMessage := trayUser32.NewProc("GetMessageW")
 	translateMessage := trayUser32.NewProc("TranslateMessage")
@@ -171,26 +224,6 @@ func runTray(onReady, onExit func(), clicks chan<- uintptr, onRightClick func(hw
 				systray.Quit()
 			}
 			return
-		}
-		// systray v1.2.2 使用 WM_USER+1 通知：左键转交应用恢复窗口，右键弹出记录菜单。
-		if msg.message == wmTrayNotify {
-			switch msg.lParam {
-			case wmLButtonUp:
-				select {
-				case clicks <- msg.lParam:
-				default:
-				}
-				continue
-			case wmRButtonUp:
-				if onRightClick != nil {
-					onRightClick(msg.window)
-				}
-				continue
-			}
-		}
-		if msg.message == wmCommand && onCommand != nil && msg.wParam&0xFFFF >= trayMenuRecordBase {
-			onCommand(msg.wParam & 0xFFFF)
-			continue
 		}
 		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
