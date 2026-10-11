@@ -132,7 +132,7 @@ const handleQuitApp = async () => {
 
         <n-form-item label="说明">
           <n-text depth="3" style="font-size: 12px">
-            隐藏后左键点击托盘图标恢复窗口，右键直接打开设置；需要完全退出可点下方“退出应用”
+            隐藏后左键点击托盘图标恢复窗口；右键菜单可定位最近记录、切换开机自启或打开设置；需要完全退出可点下方“退出应用”
           </n-text>
         </n-form-item>
       </div>

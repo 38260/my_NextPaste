@@ -4,6 +4,8 @@ async (page) => {
   const assert = (condition, message) => { if (!condition) throw new Error(message) }
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
+  page.on('console', entry => { if (entry.type() === 'error') errors.push(entry.text()) })
+  await page.route('**/favicon.ico', route => route.fulfill({status:204,body:''}))
   await page.addInitScript(() => {
     const logs = [
       {level:'INFO', category:'clipboard', contentId:1, preview:'短预览', message:'收到文本事件', timestamp:1800000000001},
@@ -11,13 +13,15 @@ async (page) => {
       {level:'ERROR', category:'clipboard', contentId:3, preview:'不可用文本', message:'读取事件', timestamp:1800000000003},
       {level:'INFO', category:'connection', contentId:0, message:'连接已建立', timestamp:1800000000004}
     ]
-    window.clipTest = {reads:[], copies:[], callbacks:{}, errors:[], failClear:false, hold:false, pending:null}
+    window.clipTest = {reads:[], copies:[], callbacks:{}, reveals:[], applied:[], failClear:false, hold:false, pending:null}
     window.runtime = {
       EventsOnMultiple: (name, callback) => {window.clipTest.callbacks[name]=callback; return () => {}},
       EventsOff: () => {}, WindowMinimise: () => {}, Environment: () => Promise.resolve({platform:'windows'})
     }
     window.go = {main:{App:{
-      GetSettings: async () => ({maxLogs:500}), ApplySettings: async () => {},
+      GetSettings: async () => ({maxLogs:500}),
+      ApplySettings: async raw => {window.clipTest.applied.push(JSON.parse(raw))},
+      SetContentRevealed: async value => {window.clipTest.reveals.push(value)},
       GetLogs: async () => logs, GetServerStatus: async () => ({isRunning:false,clientCount:0}),
       GetClientStatus: async () => ({isConnected:false,serverUrl:''}), GetServerClients: async () => [],
       GetLocalIPs: async () => ['127.0.0.1'], GetAutostartStatus: async () => ({enabled:false,mode:'server',error:''}),
@@ -49,6 +53,7 @@ async (page) => {
   assert(await page.locator('.body-clip, .clip-resizer').count() === 0, '独立面板仍存在')
   assert(await page.locator('.clip-cell').count() === 3, '剪贴板单元格缺失')
   assert(await page.evaluate(() => window.clipTest.reads.length) === 0, '隐藏状态读取了正文')
+  assert(await page.evaluate(() => window.clipTest.reveals[0]) === false, '初始隐藏偏好未同步后端')
 
   const first = page.locator('.clip-cell').nth(0)
   await first.getByRole('button', {name:'显示内容', exact:true}).first().click()
@@ -72,6 +77,7 @@ async (page) => {
   await page.getByRole('switch', {name:'显示全部剪贴板内容'}).click()
   await page.getByRole('alert').filter({hasText:'测试内容不可用'}).waitFor()
   assert(await page.evaluate(() => localStorage.getItem('np:clipReveal')) === '1', '全局揭示偏好未持久化')
+  await page.waitForFunction(() => window.clipTest.reveals.at(-1) === true)
 
   await table.getByRole('button', {name:'尺寸', exact:true}).click()
   await page.locator('.size-row input').nth(0).fill('720')
@@ -134,6 +140,20 @@ async (page) => {
   await page.evaluate(() => window.clipTest.callbacks['settings:open']())
   assert(await page.getByText('系统设置', {exact:true}).count() === 1, '重复托盘右键产生多个设置面板')
   assert(await page.getByRole('button', {name:'退出应用',exact:true}).isVisible(), '设置中缺失退出入口')
+  await page.evaluate(() => window.clipTest.callbacks['autostart:changed'](true))
+  assert(await page.getByRole('checkbox', {name:'随操作系统自动启动'}).isChecked(), '托盘自启事件未更新开关')
+  await page.waitForFunction(() => window.clipTest.applied.at(-1)?.autoStartEnabled === true)
+  await page.evaluate(() => window.clipTest.callbacks['autostart:changed'](false))
+  await page.waitForFunction(() => window.clipTest.applied.at(-1)?.autoStartEnabled === false)
+  await page.evaluate(() => window.clipTest.callbacks['window:restored']())
+  await page.getByText('系统设置', {exact:true}).waitFor({state:'hidden'})
+  await page.evaluate(() => {
+    window.clipTest.callbacks['settings:open']()
+    window.clipTest.callbacks['record:focus'](1)
+  })
+  await page.getByText('系统设置', {exact:true}).waitFor({state:'hidden'})
+  await page.locator('tr[data-record-id="1"].record-highlight').waitFor()
+  await page.waitForFunction(() => window.clipTest.reveals.at(-1) === false)
   assert(errors.length === 0, `运行时错误：${errors.join(';')}`)
-  console.log('PASS: 剪贴板表格交互、6 组布局、托盘打开设置与退出入口')
+  return {clipboardTable:true, layouts:6, trayEvents:true, errors}
 }
