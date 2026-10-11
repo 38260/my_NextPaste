@@ -37,6 +37,9 @@ func (a *App) startTray() <-chan struct{} {
 					a.ShowWindow()
 					if click == 0x0205 {
 						wailsruntime.EventsEmit(a.ctx, "settings:open")
+					} else {
+						// 左键恢复主界面：收起上次遗留的设置面板，避免误以为左键会打开设置。
+						wailsruntime.EventsEmit(a.ctx, "window:restored")
 					}
 				case <-show.ClickedCh:
 					a.ShowWindow()

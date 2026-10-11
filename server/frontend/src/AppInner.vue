@@ -281,6 +281,8 @@ onMounted(() => {
 
   EventsOn('logs:updated', onLogsUpdated)
   EventsOn('settings:open', () => { settingsOpen.value = true })
+  // 托盘左键恢复主界面时，收起上次遗留的设置面板
+  EventsOn('window:restored', () => { settingsOpen.value = false })
 
   const statusInterval = window.setInterval(() => {
     void refreshStatus()
@@ -290,6 +292,7 @@ onMounted(() => {
     window.clearInterval(statusInterval)
     EventsOff('logs:updated')
     EventsOff('settings:open')
+    EventsOff('window:restored')
   })
 })
 
