@@ -33,6 +33,13 @@ func main() {
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		OnBeforeClose:    app.beforeClose,
+		// 单实例锁：重复启动时唤起已有窗口，第二实例自行退出
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "NextPaste-Server-ChuanJian",
+			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
+				app.onSecondInstanceLaunch()
+			},
+		},
 		// 无边框窗口，使用自定义标题栏
 		Frameless: true,
 		Bind: []interface{}{

@@ -146,6 +146,14 @@ func (a *App) showRecord(id int64) {
 	runtime.EventsEmit(a.ctx, "record:focus", id)
 }
 
+// onSecondInstanceLaunch 单实例锁回调：重复启动时唤起已有窗口
+func (a *App) onSecondInstanceLaunch() {
+	if a.ctx == nil {
+		return
+	}
+	a.ShowWindow()
+}
+
 // Quit 完全退出应用
 func (a *App) Quit() {
 	a.quitting.Store(true)
