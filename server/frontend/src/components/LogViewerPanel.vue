@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, ref, watch } from 'vue'
+import { computed, h, nextTick, onUnmounted, ref, watch } from 'vue'
 import {
   NButton,
   NCard,
@@ -23,7 +23,6 @@ import { DEFAULT_SIZES, SIZE_LIMITS, clampSize, loadSizes, saveSizes, type ClipS
 interface Props {
   logs: LogEntry[]
   compact?: boolean
-  focusId?: number | null
 }
 
 interface Emits {
@@ -88,18 +87,23 @@ const filteredLogs = computed(() => {
 const highlightId = ref<number | null>(null)
 let highlightTimer: number | undefined
 
-watch(() => props.focusId, async (id) => {
+const focusRecord = async (id: number) => {
   if (!id) return
   if (!filteredLogs.value.some((l) => l.contentId === id)) {
     filterCategory.value = 'clipboard'
     filterLevel.value = 'ALL'
   }
+  // 每次定位都重建高亮，连续点击同一记录也能重新播放动画。
+  highlightId.value = null
   await nextTick()
   document.querySelector(`tr[data-record-id="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   highlightId.value = id
   window.clearTimeout(highlightTimer)
   highlightTimer = window.setTimeout(() => { highlightId.value = null }, 2600)
-})
+}
+
+defineExpose({ focusRecord })
+onUnmounted(() => window.clearTimeout(highlightTimer))
 
 const rowProps = (row: LogEntry) => ({
   ...(row.contentId ? { 'data-record-id': String(row.contentId) } : {}),

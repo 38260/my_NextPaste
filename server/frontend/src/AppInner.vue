@@ -286,7 +286,7 @@ onMounted(() => {
   // 托盘菜单点击最近记录：关闭设置面板并定位到日志表对应行
   EventsOn('record:focus', (id: number) => {
     settingsOpen.value = false
-    recordFocusId.value = id
+    void logPanel.value?.focusRecord(id)
   })
   // 托盘菜单切换开机自启后，同步设置面板的开关
   EventsOn('autostart:changed', (enabled: boolean) => {
@@ -314,8 +314,7 @@ const colorScheme = computed<ColorScheme>({
 
 const settingsOpen = ref(false)
 
-// 托盘菜单点击的最近记录 ID（触发日志表滚动定位）
-const recordFocusId = ref<number | null>(null)
+const logPanel = ref<InstanceType<typeof LogViewerPanel> | null>(null)
 
 // 响应式布局：窗口宽度驱动日志表列宽与顶部条形态
 const windowWidth = ref(window.innerWidth)
@@ -636,7 +635,7 @@ watch(
 
       <div class="page-body">
         <div class="body-log">
-          <LogViewerPanel :logs="logs" :compact="compactMode" :focus-id="recordFocusId" @clear="handleClearLogs" />
+          <LogViewerPanel ref="logPanel" :logs="logs" :compact="compactMode" @clear="handleClearLogs" />
         </div>
       </div>
     </div>
