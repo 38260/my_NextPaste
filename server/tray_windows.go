@@ -22,6 +22,7 @@ const (
 	trayMenuRecordBase = 0x7000 // 最近记录条目：base + 下标
 	trayMenuSettings   = 0x7100 // 打开设置
 	trayMenuQuit       = 0x7101 // 退出应用
+	trayMenuAutostart  = 0x7102 // 开机自启开关
 
 	wmTrayNotify = 0x0401 // systray v1.2.2 的托盘通知消息（WM_USER+1）
 	wmCommand    = 0x0111
@@ -31,6 +32,7 @@ const (
 
 	mfString       = 0x0000
 	mfSeparator    = 0x0800
+	mfChecked      = 0x0008
 	tpmLeftAlign   = 0x0000
 	tpmBottomAlign = 0x0020
 )
@@ -90,21 +92,26 @@ func (a *App) showTrayMenu(hwnd uintptr) {
 	}
 	defer procDestroyMenu.Call(menu)
 
-	appendItem := func(id uintptr, label string) {
+	appendItem := func(id uintptr, label string, flags uintptr) {
 		text, err := windows.UTF16PtrFromString(label)
 		if err != nil {
 			return
 		}
-		procAppendMenuW.Call(menu, mfString, id, uintptr(unsafe.Pointer(text)))
+		procAppendMenuW.Call(menu, flags, id, uintptr(unsafe.Pointer(text)))
 	}
 	for i, record := range records {
-		appendItem(trayMenuRecordBase+uintptr(i), record.Label)
+		appendItem(trayMenuRecordBase+uintptr(i), record.Label, mfString)
 	}
 	if len(records) > 0 {
 		procAppendMenuW.Call(menu, mfSeparator, 0, 0)
 	}
-	appendItem(trayMenuSettings, "打开设置")
-	appendItem(trayMenuQuit, "退出应用")
+	autostartFlags := uintptr(mfString)
+	if a.autostartEnabled() {
+		autostartFlags |= mfChecked
+	}
+	appendItem(trayMenuAutostart, "开机自启", autostartFlags)
+	appendItem(trayMenuSettings, "打开设置", mfString)
+	appendItem(trayMenuQuit, "退出应用", mfString)
 
 	var point struct{ X, Y int32 }
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&point)))
@@ -122,6 +129,8 @@ func (a *App) routeTrayCommand(id uintptr) {
 		a.showSettings()
 	case id == trayMenuQuit:
 		a.Quit()
+	case id == trayMenuAutostart:
+		a.toggleTrayAutostart()
 	case id >= trayMenuRecordBase && id < trayMenuRecordBase+trayRecentCount:
 		a.trayMenuMu.Lock()
 		var target int64

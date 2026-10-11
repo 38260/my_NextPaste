@@ -288,6 +288,10 @@ onMounted(() => {
     settingsOpen.value = false
     recordFocusId.value = id
   })
+  // 托盘菜单切换开机自启后，同步设置面板的开关
+  EventsOn('autostart:changed', (enabled: boolean) => {
+    settings.value.autoStartEnabled = Boolean(enabled)
+  })
 
   const statusInterval = window.setInterval(() => {
     void refreshStatus()
@@ -299,6 +303,7 @@ onMounted(() => {
     EventsOff('settings:open')
     EventsOff('window:restored')
     EventsOff('record:focus')
+    EventsOff('autostart:changed')
   })
 })
 

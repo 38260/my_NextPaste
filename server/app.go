@@ -154,6 +154,37 @@ func (a *App) onSecondInstanceLaunch() {
 	a.ShowWindow()
 }
 
+// autostartEnabled 查询开机自启勾选态（读注册表，以系统为准）
+func (a *App) autostartEnabled() bool {
+	enabled, _, err := isAutostartEnabled()
+	if err != nil {
+		log.Printf("query autostart for tray menu failed: %v", err)
+	}
+	return err == nil && enabled
+}
+
+// toggleTrayAutostart 托盘菜单切换开机自启；开启时沿用当前工作模式，成功后通知前端同步
+func (a *App) toggleTrayAutostart() {
+	enabled, mode, err := isAutostartEnabled()
+	if err != nil {
+		a.onLog("ERROR", "托盘切换开机自启失败：读取注册表状态出错 "+err.Error())
+		return
+	}
+	if !enabled {
+		a.settingsMu.RLock()
+		mode = a.settings.AutoStartMode
+		a.settingsMu.RUnlock()
+	}
+	next := !enabled
+	if err := setAutostart(next, mode); err != nil {
+		a.onLog("ERROR", fmt.Sprintf("托盘%s开机自启失败: %v", map[bool]string{true: "开启", false: "关闭"}[next], err))
+		return
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "autostart:changed", next)
+	}
+}
+
 // Quit 完全退出应用
 func (a *App) Quit() {
 	a.quitting.Store(true)
