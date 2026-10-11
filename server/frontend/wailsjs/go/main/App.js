@@ -70,6 +70,10 @@ export function Quit() {
   return window['go']['main']['App']['Quit']();
 }
 
+export function SetContentRevealed(arg1) {
+  return window['go']['main']['App']['SetContentRevealed'](arg1);
+}
+
 export function SetLaunchFlags(arg1) {
   return window['go']['main']['App']['SetLaunchFlags'](arg1);
 }

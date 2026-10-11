@@ -36,6 +36,8 @@ export function HideWindow():Promise<void>;
 
 export function Quit():Promise<void>;
 
+export function SetContentRevealed(arg1:boolean):Promise<void>;
+
 export function SetLaunchFlags(arg1:main.LaunchFlags):Promise<void>;
 
 export function ShowWindow():Promise<void>;

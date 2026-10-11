@@ -21,11 +21,11 @@ export namespace main {
 	    category: string;
 	    contentId: number;
 	    timestamp: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new LogEntry(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.level = source["level"];

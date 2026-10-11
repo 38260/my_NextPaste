@@ -78,6 +78,9 @@ type App struct {
 	// 托盘右键菜单当前展示的记录（弹出时重建，点击时按命令 ID 取回）
 	trayMenuMu      sync.Mutex
 	trayMenuRecords []trayRecord
+
+	// 前端“显示内容”开关的同步副本：关闭时托盘菜单不展示剪贴板内容摘要
+	contentRevealed atomic.Bool
 }
 
 // NewApp creates a new App application struct
@@ -298,31 +301,49 @@ const trayRecentCount = 3
 // trayMenuLabelLimit 菜单标题中预览摘要的最大长度（rune）
 const trayMenuLabelLimit = 32
 
+// trayMaskedSummary 内容隐藏偏好开启时，托盘菜单中替代内容摘要的占位文案
+const trayMaskedSummary = "内容已隐藏"
+
+// SetContentRevealed 同步前端“显示内容”开关，决定托盘菜单是否展示内容摘要
+func (a *App) SetContentRevealed(revealed bool) {
+	a.contentRevealed.Store(revealed)
+}
+
 // recentClipRecords 返回最近 n 条剪贴板记录（最新在前），供托盘菜单展示
 func (a *App) recentClipRecords(n int) []trayRecord {
 	a.logsMu.RLock()
 	defer a.logsMu.RUnlock()
 
+	revealed := a.contentRevealed.Load()
 	records := make([]trayRecord, 0, n)
 	for _, entry := range a.logs {
 		if entry.Category != "clipboard" || entry.ContentID == 0 {
 			continue
 		}
 		title := time.UnixMilli(entry.Timestamp).Format("15:04:05")
-		summary := []rune(entry.Preview)
-		if len(summary) > trayMenuLabelLimit {
-			summary = append(summary[:trayMenuLabelLimit:trayMenuLabelLimit], '…')
+		summary := trayMaskedSummary
+		if revealed {
+			summary = truncateRunes(entry.Preview, trayMenuLabelLimit)
 		}
 		records = append(records, trayRecord{
 			ID:      entry.ContentID,
-			Label:   title + " · " + string(summary),
-			Tooltip: title + " · " + entry.Preview,
+			Label:   title + " · " + summary,
+			Tooltip: title + " · " + summary,
 		})
 		if len(records) >= n {
 			break
 		}
 	}
 	return records
+}
+
+// truncateRunes 按 rune 截断超长文本并补省略号
+func truncateRunes(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit]) + "…"
 }
 
 // ============================================

@@ -17,6 +17,7 @@ import {
 import type { DataTableColumns } from 'naive-ui'
 import type { LogEntry } from '../types'
 import ClipboardContentCell from './ClipboardContentCell.vue'
+import { SetContentRevealed } from '../../wailsjs/go/main/App'
 import { DEFAULT_SIZES, SIZE_LIMITS, clampSize, loadSizes, saveSizes, type ClipSizes } from '../utils/clipLayout'
 
 interface Props {
@@ -50,6 +51,10 @@ const resetSizes = () => { sizes.value = { ...DEFAULT_SIZES } }
 const MASK_KEY = 'np:clipReveal'
 const revealAll = ref(localStorage.getItem(MASK_KEY) === '1')
 const overrides = ref<Record<number, boolean>>({})
+// “显示内容”开关同步到后端：托盘右键菜单据此决定是否展示内容摘要
+watch(revealAll, (value) => {
+  SetContentRevealed(value).catch(() => {})
+}, { immediate: true })
 const isShown = (id: number) => overrides.value[id] ?? revealAll.value
 const toggleAll = (value: boolean) => {
   revealAll.value = value

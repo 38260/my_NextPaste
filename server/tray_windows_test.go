@@ -182,10 +182,23 @@ func TestRecentClipRecords(t *testing.T) {
 	app.onLogClip("INFO", "检测到剪贴板文本变化: 6 字符", "text", []byte("第二条内容"))
 	app.onLog("INFO", "系统日志不进托盘菜单")
 
+	// 内容隐藏偏好默认开启：菜单不展示内容摘要，只显示占位文案。
 	records := app.recentClipRecords(trayRecentCount)
 	if len(records) != 3 {
 		t.Fatalf("recent records = %d, want 3", len(records))
 	}
+	for i, record := range records {
+		if !strings.Contains(record.Label, trayMaskedSummary) {
+			t.Errorf("masked record %d label = %q, want %q", i, record.Label, trayMaskedSummary)
+		}
+	}
+	if strings.Contains(records[0].Label, "第二条内容") {
+		t.Errorf("masked record should not leak content, label = %q", records[0].Label)
+	}
+
+	// 前端同步“显示内容”开启后：最新记录在前，图片显示大小摘要，超长文本截断。
+	app.SetContentRevealed(true)
+	records = app.recentClipRecords(trayRecentCount)
 	if !strings.Contains(records[0].Label, "第二条内容") {
 		t.Errorf("newest record should come first, label = %q", records[0].Label)
 	}
@@ -201,15 +214,12 @@ func TestRecentClipRecords(t *testing.T) {
 		}
 	}
 
-	// 超长文本在菜单标题里截断并带省略号，完整预览留在悬停提示。
+	// 超长文本在菜单标题里截断并带省略号。
 	long := strings.Repeat("长", 60)
 	app.onLogClip("INFO", "检测到剪贴板文本变化", "text", []byte(long))
 	records = app.recentClipRecords(trayRecentCount)
 	if !strings.Contains(records[0].Label, "…") || len([]rune(records[0].Label)) > 60 {
 		t.Errorf("long text should be truncated with ellipsis, label = %q", records[0].Label)
-	}
-	if !strings.Contains(records[0].Tooltip, long) {
-		t.Errorf("tooltip should keep the full preview, tooltip = %q", records[0].Tooltip)
 	}
 
 	// 清空后菜单数据同步清空。
