@@ -2,6 +2,13 @@
 
 > 规划文档：docs/feature-plan-2026-10-10.md · 每完成一项勾选并同步 commit
 
+## 26. 独立审阅与验收（2026-10-11）
+
+- [x] T26.1 核对本轮 11 个提交、运行程序 SHA256、单进程/8080、快捷方式与迁移现状；保留用户 `logo.png`。
+- [x] T26.2 桌面端 Go 全量测试/静态检查、前端类型检查/构建、中继端编译与静态检查通过。
+- [x] T26.3 隔离复现迁移失败和相同记录重复定位问题，完成浏览器回归、独立 Wails 生产构建与跨平台编译；验收 exe 与正式程序哈希一致。临时测试和构建产物已清理；审阅结论、失败证据和限制详见 `docs/review-acceptance-2026-10-11.md`。提交：`docs: 记录传笺桌面端独立审阅与验收结论`。
+- [ ] T26.4 整体验收暂不通过：待修复 WebView2 迁移失败后继续使用新目录、相同记录连续定位失效、自启迁移先删后写、浏览器回归漏报错误；核对仍存在的旧自启值，再复验。手机端同步、HAP 构建与物理鼠标操作尚未验收。
+
 ## 25. 项目更名为传笺 ChuanJian（2026-10-11）
 
 - [x] T25.1 桌面端更名与遗留迁移：wails.json 更名（name 传笺、产物 `ChuanJian.exe`、新增版本信息“传笺 ChuanJian 1.0.0”）；窗口标题/前端页面标题/头部品牌改为“传笺”；WS 客户端设备名“传笺 桌面端”；单实例 UniqueId `ChuanJian-Desktop`。新增 `brand_windows.go`：WebView2 数据目录固定到 `%AppData%\ChuanJian`（与 exe 文件名解耦），启动时自动迁入旧 `%AppData%\NextPaste Server.exe` 数据目录，exe 改名不再丢失 localStorage 配置；自启注册表值名 `NextPaste`→`ChuanJian`，启动时自动迁移旧值（保留开启状态与工作模式、路径更新为新 exe，开发构建跳过）；非 Windows 自启服务名同步更名。全量 Go 测试/静态检查、Linux/macOS 交叉编译、前端构建、Wails 生产构建通过。提交：`feat: 项目更名为传笺 ChuanJian 并迁移品牌遗留`。
