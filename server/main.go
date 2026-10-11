@@ -16,14 +16,18 @@ func main() {
 	flags := parseFlags()
 
 	// 项目更名为传笺：迁移旧版遗留（WebView2 数据目录、自启注册项），并固定数据目录与 exe 名解耦
-	webviewDataPath := prepareBrandMigration()
+	webviewDataPath, err := prepareBrandMigration()
+	if err != nil {
+		showStartupError(err)
+		return
+	}
 
 	// 创建应用实例
 	app := NewApp()
 	app.SetLaunchFlags(flags)
 
 	// 创建并运行应用
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:       "传笺",
 		Width:       1200,
 		Height:      800,
