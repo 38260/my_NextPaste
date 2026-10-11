@@ -2,6 +2,14 @@
 
 > 规划文档：docs/feature-plan-2026-10-10.md · 每完成一项勾选并同步 commit
 
+## 25. 项目更名为传笺 ChuanJian（2026-10-11）
+
+- [x] T25.1 桌面端更名与遗留迁移：wails.json 更名（name 传笺、产物 `ChuanJian.exe`、新增版本信息“传笺 ChuanJian 1.0.0”）；窗口标题/前端页面标题/头部品牌改为“传笺”；WS 客户端设备名“传笺 桌面端”；单实例 UniqueId `ChuanJian-Desktop`。新增 `brand_windows.go`：WebView2 数据目录固定到 `%AppData%\ChuanJian`（与 exe 文件名解耦），启动时自动迁入旧 `%AppData%\NextPaste Server.exe` 数据目录，exe 改名不再丢失 localStorage 配置；自启注册表值名 `NextPaste`→`ChuanJian`，启动时自动迁移旧值（保留开启状态与工作模式、路径更新为新 exe，开发构建跳过）；非 Windows 自启服务名同步更名。全量 Go 测试/静态检查、Linux/macOS 交叉编译、前端构建、Wails 生产构建通过。提交：`feat: 项目更名为传笺 ChuanJian 并迁移品牌遗留`。
+- [x] T25.2 文档与鸿蒙端更名：server/README、relay-server/README 与中继服务界面横幅改为传笺（保留上游 NextPaste fork 署名、NPBP 协议名与旧记录路径迁移代码）；HarmonyOS 应用名/标题/关于页改为“传笺”（en 资源 “ChuanJian”），关于页仓库地址指向本项目 fork。提交：同 T25.1。
+- [x] T25.3 交付验收：旧实例经托盘菜单优雅退出（未强制终止）后删除旧名 exe（历史备份保留）；桌面快捷方式重建为 `传笺.lnk`（指向 `ChuanJian.exe`，保留 `-minimized` 参数、工作目录与绿色图标），移除旧 `NextPaste.lnk`。启动后实测：旧注册表值已移除、新值 `ChuanJian` 指向新 exe 且自启状态/模式保留；WebView2 数据目录已迁移（8080 自动监听证明 localStorage 配置完好）；真机 Win32 验收（单实例/关闭隐藏/左键恢复/右键菜单/退出）通过；exe 版本信息经 Win32 API 核验为“传笺 ChuanJian 1.0.0”。正式程序 `server/build/bin/ChuanJian.exe` SHA256：`A9E4387F7B13243B8DA97293A40C0436ABF14B3F54543C7B3141B850899F1BE0`。临时验收脚本已清理。提交：`docs: 记录项目更名交付与迁移验收`。
+
+用户验收：桌面“传笺”图标启动，任务栏显示“传笺”，exe 属性显示“传笺 ChuanJian 1.0.0”；连接配置与显示偏好保留、开机自启继续生效（注册表值名变为 ChuanJian）；托盘右键菜单、单实例行为不变。鸿蒙端资源更名未做真机构建验证（本机无 DevEco），下次构建 HAP 时在设备上生效。
+
 ## 24. 托盘右键记录菜单、单实例与绿色图标（2026-10-11）
 
 - [x] T24.1 托盘左键恢复主界面并收起设置面板：左键不再触发 `settings:open`，改为发送 `window:restored`，前端收起上次遗留的设置面板，消除“左键看起来打开设置”的错觉。前端类型检查/构建通过。提交：`feat: 托盘左键恢复主界面并收起设置面板`。
